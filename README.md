@@ -27,6 +27,7 @@ Voxel Fortnite is a browser-based 3D survival game where you must eliminate all 
 - **Space** - Jump
 - **Mouse** - Look around (camera control)
 - **Click** - Lock pointer / Start game
+- **V** - Toggle camera mode (First Person / Third Person)
 
 ### Combat
 - **Left Click** - Shoot / Punch
@@ -126,6 +127,10 @@ Access the settings menu from the main menu or pause screen:
 - **Storm Time:** 60-300 seconds
   - Configure how long before the storm fully closes
   
+- **Camera Mode:** First Person / Third Person
+  - Choose your preferred camera perspective
+  - Can be toggled in-game with V key
+  
 - **Debug Mode:** On / Off
   - Toggle debug information overlay
 
@@ -136,7 +141,14 @@ All settings are saved to browser localStorage and persist between sessions.
 
 - **Voxel Art Style:** Blocky, Minecraft-inspired graphics
 - **Dynamic Lighting:** Real-time shadows and ambient lighting
-- **Third-Person Camera:** Over-the-shoulder perspective
+- **Camera Modes:**
+  - **Third-Person (TPS):** Over-the-shoulder perspective with full character visibility
+  - **First-Person (FPS):** Immersive eye-level view (toggle with V key)
+- **Professional Crosshair:** Cross-style aiming reticle with shadow for visibility
+- **Bullet Tracers:** Visual feedback showing shot trajectory
+  - Yellow tracers for regular shots
+  - Red tracers when hitting enemies
+  - Fade-out animation for smooth visual effect
 - **Character Animations:**
   - Walking/running animations
   - Punch animations (alternating arms)
@@ -150,6 +162,8 @@ All settings are saved to browser localStorage and persist between sessions.
 
 ### Victory Condition
 Eliminate all enemies on the map to win the game. A victory screen will appear showing your achievement.
+
+![Victory Screen](docs/victory-royale.jpg)
 
 ### Defeat Conditions
 - **Health reaches 0:** You die and the game ends
@@ -229,7 +243,11 @@ The built files will be in the `dist/` directory.
 
 7. **Track Distance:** Monitor your distance traveled to manage stamina drain.
 
-8. **Difficulty Matters:** Start on Easy to learn the mechanics, then increase difficulty.
+8. **Camera Perspective:** Use V to toggle between first and third person based on your preference.
+
+9. **Watch Your Tracers:** Yellow bullet trails help you see where you're shooting and adjust your aim.
+
+10. **Difficulty Matters:** Start on Easy to learn the mechanics, then increase difficulty.
 
 ## 📝 License
 
