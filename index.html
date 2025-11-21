@@ -31,6 +31,7 @@
             <div>ID: <span id="debug-target-id">---</span></div>
         </div>
     </div>
+        <div id="debug-container" style="position:absolute; top:0; left:0; pointer-events:none;"></div>
 
     <!-- HUD -->
     <div id="hud">
@@ -49,6 +50,13 @@
                     <div id="health-bar" class="bar-fill health-fill" style="width: 100%;"></div>
                 </div>
                 <span id="health-text">100</span>
+            </div>
+            <div class="bar-container">
+                <div class="bar-label">STAMINA</div>
+                <div class="bar-bg">
+                    <div id="stamina-bar" class="bar-fill stamina-fill" style="width: 100%;"></div>
+                </div>
+                <span id="stamina-text">100</span>
             </div>
         </div>
 
@@ -74,6 +82,13 @@
     </div>
     </div>
 
+    <!-- Pause Menu Modal -->
+    <div id="pause-menu" class="modal hidden" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; flex-direction:column; justify-content:center; align-items:center; color:white; font-family:Arial;">
+        <h2>Game Paused</h2>
+        <button id="resume-btn" style="margin:10px; padding:10px 20px; font-size:16px;">Resume</button>
+        <button id="settings-btn" style="margin:10px; padding:10px 20px; font-size:16px;">Settings</button>
+        <button id="quit-btn" style="margin:10px; padding:10px 20px; font-size:16px;">Quit</button>
+    </div>
     <!-- Main Menu -->
     <div id="main-menu">
         <h1 class="game-title">VOXEL FORTNITE</h1>

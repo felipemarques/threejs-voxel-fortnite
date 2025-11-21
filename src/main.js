@@ -38,6 +38,15 @@ class Game {
         
         // Clock
         this.clock = new THREE.Clock();
+        // Pause state
+        this.isPaused = false;
+        this.pauseMenu = document.getElementById('pause-menu');
+        // ESC key to toggle pause
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Escape') {
+                this.togglePause();
+            }
+        });
 
         // Setup Menu
         this.setupMenu();

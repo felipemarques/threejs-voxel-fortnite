@@ -9,10 +9,14 @@ export class HUD {
         this.healthText = document.getElementById('health-text');
         this.shieldBar = document.getElementById('shield-bar');
         this.shieldText = document.getElementById('shield-text');
+        this.staminaBar = document.getElementById('stamina-bar');
+        this.staminaText = document.getElementById('stamina-text');
         this.weaponName = document.getElementById('weapon-name');
         this.ammoCount = document.getElementById('ammo-count');
         this.slots = document.querySelectorAll('.slot');
         this.timerValue = document.getElementById('timer-value');
+        // Debug container for per‑object labels
+        this.debugContainer = document.getElementById('debug-container');
         this.gameOverScreen = document.getElementById('game-over-screen');
         
         // Dashboard Elements
@@ -67,6 +71,10 @@ export class HUD {
         
         this.shieldBar.style.width = `${this.player.shield}%`;
         this.shieldText.innerText = Math.ceil(this.player.shield);
+        
+        // Stamina
+        this.staminaBar.style.width = `${this.player.stamina}%`;
+        this.staminaText.innerText = Math.ceil(this.player.stamina);
 
         // Weapon
         const weapon = this.player.weapons[this.player.currentWeaponIndex];
@@ -78,6 +86,28 @@ export class HUD {
             this.ammoCount.innerText = weapon.ammo === Infinity ? '∞' : `${weapon.currentMag} / ${weapon.ammo}`;
         }
 
+        // Debug per‑object labels (only when debug mode is active)
+        if (this.settings.debugMode && this.debugContainer) {
+            // Clear previous labels
+            this.debugContainer.innerHTML = '';
+            const objects = this.player.worldObjects || [];
+            objects.forEach(obj => {
+                if (!obj.userData) return;
+                const pos = obj.position.clone();
+                pos.project(this.player.camera);
+                const x = (pos.x + 1) / 2 * window.innerWidth;
+                const y = (-pos.y + 1) / 2 * window.innerHeight;
+                const div = document.createElement('div');
+                div.className = 'debug-label';
+                div.style.position = 'absolute';
+                div.style.left = `${x}px`;
+                div.style.top = `${y}px`;
+                div.innerText = `${obj.userData.gameName}: ${obj.userData.gameId}`;
+                this.debugContainer.appendChild(div);
+            });
+        } else if (this.debugContainer) {
+            this.debugContainer.innerHTML = '';
+        }
 
         // Hotbar
         // Clear existing slots

@@ -11,6 +11,10 @@ export class Player {
         this.health = 100;
         this.shield = 100;
         this.isDead = false;
+        // Stamina for punching
+        this.stamina = 100; // max stamina
+        this.punchCount = 0; // punches since last rest
+        this.isTired = false; // fatigue flag
 
         // Movement
         this.velocity = new THREE.Vector3();
@@ -27,7 +31,8 @@ export class Player {
         // Weapons
         this.allWeapons = [
             { name: 'Pistola', ammo: 12, maxAmmo: 60, magazineSize: 12, currentMag: 12, damage: 20, cooldown: 0.5, lastShot: 0, reloadTime: 1.5 },
-            { name: 'Soco', ammo: Infinity, maxAmmo: Infinity, magazineSize: Infinity, currentMag: Infinity, damage: 10, cooldown: 1.0, lastShot: 0, reloadTime: 0 },
+            // Faster punch, no charge time
+            { name: 'Soco', ammo: Infinity, maxAmmo: Infinity, magazineSize: Infinity, currentMag: Infinity, damage: 10, cooldown: 0.2, lastShot: 0, reloadTime: 0 },
             { name: 'Rifle', ammo: 30, maxAmmo: 120, magazineSize: 30, currentMag: 30, damage: 25, cooldown: 0.15, lastShot: 0, reloadTime: 2.0 },
             { name: 'Sniper', ammo: 5, maxAmmo: 20, magazineSize: 5, currentMag: 5, damage: 100, cooldown: 2.0, lastShot: 0, reloadTime: 3.0 }
         ];
@@ -582,10 +587,25 @@ export class Player {
     }
 
     punch() {
+        // Prevent punching when fatigued
+        if (this.isTired) return;
         if (this.isPunching || this.isBlocking) return;
         this.isPunching = true;
         this.punchTime = 0;
         this.punchSide = this.punchSide === 0 ? 1 : 0; // Toggle side
+
+        // Increment punch counter and handle fatigue
+        this.punchCount++;
+        if (this.punchCount >= 20) {
+            this.isTired = true;
+            // Reduce stamina as penalty
+            this.stamina = Math.max(0, this.stamina - 20);
+            // Recover after a short cooldown (e.g., 3 seconds)
+            setTimeout(() => {
+                this.isTired = false;
+                this.punchCount = 0;
+            }, 3000);
+        }
 
         // Check hit
         // Simple distance check in front of player

@@ -129,6 +129,11 @@ html {
     background-color: var(--health-green);
 }
 
+.stamina-fill {
+    background-color: #f1c40f;
+    /* gold for stamina */
+}
+
 #status-bars span {
     color: white;
     font-weight: bold;
