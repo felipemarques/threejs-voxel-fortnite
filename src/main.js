@@ -126,11 +126,46 @@ class Game {
             }
         });
 
+        // Setup pause menu buttons
+        this.setupPauseMenu();
+
         this.animate();
     }
 
+    togglePause() {
+        if (!this.player) return; // Don't pause if game hasn't started
+        
+        // If pointer lock is active, unlock it and open pause menu
+        if (this.player.controls && this.player.controls.isLocked) {
+            this.isPaused = true;
+            this.player.controls.unlock();
+            if (this.pauseMenu) this.pauseMenu.classList.remove('hidden');
+            return;
+        }
+        
+        // Otherwise, toggle pause normally
+        this.isPaused = !this.isPaused;
+        if (this.isPaused) {
+            if (this.pauseMenu) this.pauseMenu.classList.remove('hidden');
+            if (this.player.controls) this.player.controls.unlock();
+        } else {
+            if (this.pauseMenu) this.pauseMenu.classList.add('hidden');
+        }
+    }
 
-
+    setupPauseMenu() {
+        const resumeBtn = document.getElementById('resume-btn');
+        const settingsBtn = document.getElementById('settings-btn');
+        const quitBtn = document.getElementById('quit-btn');
+        
+        if (resumeBtn) resumeBtn.onclick = () => this.togglePause();
+        if (settingsBtn) settingsBtn.onclick = () => {
+            this.togglePause();
+            const menu = document.getElementById('main-menu');
+            if (menu) menu.style.display = 'block';
+        };
+        if (quitBtn) quitBtn.onclick = () => location.reload();
+    }
 
     onWindowResize() {
         this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -143,7 +178,8 @@ class Game {
 
         const dt = this.clock.getDelta();
 
-        if (this.player.controls.isLocked) {
+        // Only update game logic if not paused
+        if (!this.isPaused && this.player && this.player.controls.isLocked) {
             this.player.update(dt);
             const stormStatus = this.world.update(dt, this.player.position);
             if (stormStatus.inStorm) {

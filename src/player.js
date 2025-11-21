@@ -60,6 +60,13 @@ export class Player {
         
         this.controls = new PointerLockControls(camera, document.body);
         
+        // Prevent automatic fullscreen on pointer lock
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+        });
+        
         // Create Player Mesh (Voxel Style)
         this.createPlayerMesh();
 
