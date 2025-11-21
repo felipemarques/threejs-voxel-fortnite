@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 
 export class Player {
-    constructor(camera, scene, worldObjects) {
+    constructor(camera, scene, worldObjects, settings = {}) {
         this.camera = camera;
         this.scene = scene;
         this.worldObjects = worldObjects;
@@ -74,8 +74,10 @@ export class Player {
         // Create Player Mesh (Voxel Style)
         this.createPlayerMesh();
 
-        // Camera Offset
-        this.cameraOffset = new THREE.Vector3(0, 2, 4); // Behind and up
+        // Camera Mode (First Person / Third Person)
+        this.cameraMode = settings.cameraMode || 'TPS'; // 'FPS' or 'TPS'
+        this.fpsCameraOffset = new THREE.Vector3(0, 1.6, 0); // Eye level
+        this.tpsCameraOffset = new THREE.Vector3(0, 2, 4); // Behind and up
         
         this.initControls();
     }
@@ -210,6 +212,7 @@ export class Player {
                 case 'Digit3': this.switchWeapon(2); break;
                 case 'Digit4': this.switchWeapon(3); break;
                 case 'KeyR': this.reload(); break;
+                case 'KeyV': this.toggleCameraMode(); break; // Toggle camera view
             }
 
         };
@@ -254,6 +257,18 @@ export class Player {
 
     lockControls() {
         this.controls.lock();
+    }
+
+    toggleCameraMode() {
+        // Toggle between FPS and TPS
+        this.cameraMode = this.cameraMode === 'FPS' ? 'TPS' : 'FPS';
+        
+        // Update player mesh visibility (hide in FPS, show in TPS)
+        if (this.mesh) {
+            this.mesh.visible = this.cameraMode === 'TPS';
+        }
+        
+        console.log(`Camera mode: ${this.cameraMode}`);
     }
 
     switchWeapon(index) {
@@ -372,27 +387,54 @@ export class Player {
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
 
+        // Get bullet start position (from weapon/camera)
+        const bulletStart = this.camera.position.clone();
+        const direction = new THREE.Vector3();
+        raycaster.ray.direction.clone().normalize();
+        
+        // Default end point (max range)
+        let bulletEnd = bulletStart.clone().add(raycaster.ray.direction.clone().multiplyScalar(1000));
+        let hitSomething = false;
+
+        // Check world objects first (trees, rocks, houses)
+        if (this.worldObjects && this.worldObjects.length > 0) {
+            const worldIntersects = raycaster.intersectObjects(this.worldObjects, true);
+            if (worldIntersects.length > 0) {
+                bulletEnd = worldIntersects[0].point.clone();
+                hitSomething = true;
+            }
+        }
+
+        // Check enemies (only if closer than world hit)
         if (this.enemyManager && this.enemyManager.enemies) {
             const intersects = raycaster.intersectObjects(this.enemyManager.enemies.map(e => e.mesh));
             if (intersects.length > 0) {
-                const hitObject = intersects[0].object;
-                // Find enemy instance (hitObject might be a child mesh)
-                // We need to traverse up or find which enemy owns this mesh
-                // Since we map e.mesh (which is a Group or Mesh), it should be fine if we hit that exact object.
-                // But if we make enemies complex groups, we need to be careful.
-                // For now, let's assume simple mesh or handle parent.
+                const hitPoint = intersects[0].point;
+                const distanceToEnemy = bulletStart.distanceTo(hitPoint);
+                const distanceToWorld = bulletStart.distanceTo(bulletEnd);
                 
-                let enemy = this.enemyManager.enemies.find(e => e.mesh === hitObject);
-                if (!enemy) {
-                     // Try checking parent if it's a group part
-                     enemy = this.enemyManager.enemies.find(e => e.mesh === hitObject.parent);
-                }
+                // Only hit enemy if it's closer than world object
+                if (distanceToEnemy < distanceToWorld) {
+                    const hitObject = intersects[0].object;
+                    bulletEnd = hitPoint.clone();
+                    hitSomething = true;
+                    
+                    // Find enemy instance (hitObject might be a child mesh)
+                    let enemy = this.enemyManager.enemies.find(e => e.mesh === hitObject);
+                    if (!enemy) {
+                         // Try checking parent if it's a group part
+                         enemy = this.enemyManager.enemies.find(e => e.mesh === hitObject.parent);
+                    }
 
-                if (enemy) {
-                    enemy.takeDamage(weapon.damage);
+                    if (enemy) {
+                        enemy.takeDamage(weapon.damage);
+                    }
                 }
             }
         }
+        
+        // Create bullet tracer visualization
+        this.createBulletTracer(bulletStart, bulletEnd, hitSomething);
     }
 
     createMuzzleFlash() {
@@ -409,7 +451,39 @@ export class Player {
         flash.position.add(direction.multiplyScalar(1));
         
         this.scene.add(flash);
-        setTimeout(() => this.scene.remove(flash), 50);
+        setTimeout(() => this.scene.remove(flash), 100);
+    }
+
+    createBulletTracer(start, end, hit) {
+        // Create a line geometry for the bullet tracer
+        const points = [start, end];
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        
+        // Yellow/orange tracer for visibility, red if hit
+        const color = hit ? 0xff4444 : 0xffff00;
+        const material = new THREE.LineBasicMaterial({ 
+            color: color,
+            linewidth: 2,
+            opacity: 0.8,
+            transparent: true
+        });
+        
+        const line = new THREE.Line(geometry, material);
+        this.scene.add(line);
+        
+        // Animate tracer fade out
+        let opacity = 0.8;
+        const fadeInterval = setInterval(() => {
+            opacity -= 0.1;
+            material.opacity = opacity;
+            
+            if (opacity <= 0) {
+                clearInterval(fadeInterval);
+                this.scene.remove(line);
+                geometry.dispose();
+                material.dispose();
+            }
+        }, 30);
     }
 
     update(dt) {
@@ -536,9 +610,17 @@ export class Player {
             // But we passed 'camera' to it.
             // Let's just manually position the camera every frame.
             
-            // Update Camera Position
-            const idealOffset = new THREE.Vector3(0, 2, 4);
-            idealOffset.applyQuaternion(this.camera.quaternion);
+            // Update Camera Position based on mode (FPS or TPS)
+            let idealOffset;
+            if (this.cameraMode === 'FPS') {
+                // First Person: Camera at eye level, no offset behind
+                idealOffset = this.fpsCameraOffset.clone();
+            } else {
+                // Third Person: Camera behind and above player
+                idealOffset = this.tpsCameraOffset.clone();
+                idealOffset.applyQuaternion(this.camera.quaternion);
+            }
+            
             idealOffset.add(this.mesh.position);
             this.camera.position.copy(idealOffset);
             

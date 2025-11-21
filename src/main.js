@@ -59,6 +59,7 @@ class Game {
         const enemiesInput = document.getElementById('setting-enemies');
         const stormInput = document.getElementById('setting-storm');
         const debugCheckbox = document.getElementById('setting-debug');
+        const cameraSelect = document.getElementById('setting-camera');
         
         const enemiesVal = document.getElementById('enemy-count-val');
         const stormVal = document.getElementById('storm-time-val');
@@ -73,6 +74,7 @@ class Game {
             enemiesVal.innerText = s.enemyCount;
             stormVal.innerText = s.stormTime;
             if (s.debugMode) debugCheckbox.checked = true;
+            if (s.cameraMode) cameraSelect.value = s.cameraMode;
         }
 
         // Update labels
@@ -84,7 +86,8 @@ class Game {
                 difficulty: diffSelect.value,
                 enemyCount: parseInt(enemiesInput.value),
                 stormTime: parseInt(stormInput.value),
-                debugMode: debugCheckbox.checked
+                debugMode: debugCheckbox.checked,
+                cameraMode: cameraSelect.value
             };
             
             // Save Settings
@@ -108,7 +111,7 @@ class Game {
     startGame(settings) {
         // Components
         // 1. Player (initially without world objects)
-        this.player = new Player(this.camera, this.scene, null);
+        this.player = new Player(this.camera, this.scene, null, settings);
         
         // 2. ItemManager (needs player)
         this.itemManager = new ItemManager(this.scene, this.player);
