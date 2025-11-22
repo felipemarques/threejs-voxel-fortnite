@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxel Fortnite Prototype</title>
+  <script type="module" crossorigin src="/threejs-voxel-fortnite/dist/assets/index-DF0f_Pfd.js"></script>
+  <link rel="stylesheet" crossorigin href="/threejs-voxel-fortnite/dist/assets/index-C1IxdLja.css">
+</head>
+<body>
+    <div id="game-container"></div>
+
+    <div id="ui-layer">
+        <!-- Crosshair -->
+        <div id="crosshair"></div>
+        <!-- Hover info above crosshair -->
+        <div id="hover-info" style="position:absolute; top:48%; left:50%; transform:translate(-50%, -100%); color:#fff; pointer-events:none; font-family:Arial; font-size:14px; text-shadow:0 0 6px rgba(0,0,0,0.8);"></div>
+
+        <!-- Storm Timer -->
+        <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>
+
+        <!-- Camera Mode Hint -->
+        <div id="camera-hint" style="position: absolute; top: 60px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 12px; font-family: Arial;">Press V to toggle camera</div>
+
+        <!-- Interaction Prompt -->
+        <div id="interaction-prompt" class="hidden">Press E to interact</div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
+        <div>FPS: <span id="fps-counter">0</span></div>
+        <div>Enemies: <span id="enemy-count">0</span></div>
+        <div>Killed: <span id="kill-count">0</span></div>
+        <div>Distance: <span id="distance-traveled">0.00</span> km</div>
+        <div>Memory: <span id="memory-usage">0</span> MB</div>
+        <div>Target Dist: <span id="target-distance">---</span> m</div>
+        <div id="debug-info" style="display: none; color: #f1c40f; margin-top: 10px; border-top: 1px solid #555; padding-top: 5px;">
+            <div>Target: <span id="debug-target-name">None</span></div>
+            <div>ID: <span id="debug-target-id">---</span></div>
+        </div>
+    </div>
+        <div id="debug-container" style="position:absolute; top:0; left:0; pointer-events:none;"></div>
+
+    <!-- HUD -->
+    <div id="hud">
+        <!-- Health & Shield -->
+        <div id="status-bars">
+            <div class="bar-container">
+                <div class="bar-label">SHIELD</div>
+                <div class="bar-bg">
+                    <div id="shield-bar" class="bar-fill shield-fill" style="width: 100%;"></div>
+                </div>
+                <span id="shield-text">100</span>
+            </div>
+            <div class="bar-container">
+                <div class="bar-label">HP</div>
+                <div class="bar-bg">
+                    <div id="health-bar" class="bar-fill health-fill" style="width: 100%;"></div>
+                </div>
+                <span id="health-text">100</span>
+            </div>
+            <div class="bar-container">
+                <div class="bar-label">STAMINA</div>
+                <div class="bar-bg">
+                    <div id="stamina-bar" class="bar-fill stamina-fill" style="width: 100%;"></div>
+                </div>
+                <span id="stamina-text">100</span>
+            </div>
+        </div>
+
+        <!-- Weapon Info (Bottom Right) -->
+        <div id="weapon-info">
+            <span id="weapon-name">Pistola</span>
+            <span id="ammo-count">12 / 60</span>
+        </div>
+
+        <!-- Hotbar (Bottom Center) -->
+        <div id="hotbar">
+            <div class="slot active" data-slot="1">1</div>
+            <div class="slot" data-slot="2">2</div>
+            <div class="slot" data-slot="3">3</div>
+            <div class="slot" data-slot="4">4</div>
+        </div>
+
+        <!-- Game Over / Victory Screen -->
+        <div id="game-over-screen" class="hidden">
+            <h1 id="game-over-title">VICTORY ROYALE!</h1>
+            <button id="restart-btn">Play Again</button>
+        </div>
+    </div>
+    </div>
+
+    <!-- Pause Menu Modal -->
+    <div id="pause-menu" class="modal hidden" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; flex-direction:column; justify-content:center; align-items:center; color:white; font-family:Arial;">
+        <h2>Game Paused</h2>
+        <button id="resume-btn" style="margin:10px; padding:10px 20px; font-size:16px;">Resume</button>
+        <button id="settings-btn" style="margin:10px; padding:10px 20px; font-size:16px;">Settings</button>
+        <button id="quit-btn" style="margin:10px; padding:10px 20px; font-size:16px;">Quit</button>
+    </div>
+    <!-- Main Menu -->
+    <div id="main-menu">
+        <h1 class="game-title">VOXEL FORTNITE</h1>
+        
+        <div class="menu-container">
+            <div class="menu-group">
+                <label>Difficulty</label>
+                <select id="setting-difficulty">
+                    <option value="easy">Easy</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="hard">Hard</option>
+                </select>
+            </div>
+
+            <div class="menu-group">
+                <label>Enemies: <span id="enemy-count-val">15</span></label>
+                <input type="range" id="setting-enemies" min="5" max="50" value="15">
+            </div>
+
+            <div class="menu-group">
+                <label>Storm Time (s): <span id="storm-time-val">180</span></label>
+                <input type="range" id="setting-storm" min="60" max="600" step="30" value="180">
+            </div>
+
+            <div class="menu-group">
+                <label>Camera Mode</label>
+                <select id="setting-camera">
+                    <option value="TPS" selected>Third Person</option>
+                    <option value="FPS">First Person</option>
+                </select>
+            </div>
+
+            <div class="menu-group" style="flex-direction: row; align-items: center; gap: 10px;">
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <label style="margin:0; color:white; font-weight:bold;">Debug Options</label>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-debug" style="width: 20px; height: 20px;">
+                        <label for="setting-debug" style="margin: 0; color:white;">Debug Mode</label>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-show-ids" style="width: 20px; height: 20px;">
+                        <label for="setting-show-ids" style="margin: 0; color:white;">Show Rendered IDs</label>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-show-target-distance" style="width: 20px; height: 20px;">
+                        <label for="setting-show-target-distance" style="margin: 0; color:white;">Show Target Distance (Top-Left)</label>
+                    </div>
+                </div>
+            </div>
+            <div class="menu-group">
+                <label>Music Volume</label>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="range" id="setting-music-volume" min="0" max="100" value="50">
+                    <span id="setting-music-volume-val" style="color:white; font-weight:bold;">50</span>
+                </div>
+            </div>
+
+            <button id="play-btn">PLAY GAME</button>
+        </div>
+    </div>
+
+</body>
+</html>
