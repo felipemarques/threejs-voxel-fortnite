@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "description": "Voxel Fortnite Prototype with Three.js",
   "main": "src/main.js",
-  "scripts": {
+    "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "vite build --base /threejs-voxel-fortnite/dist/",
+    "build:repo": "vite build --base /threejs-voxel-fortnite/",
+    "preview": "vite preview --strictPort"
   },
   "keywords": [],
   "author": "",
