@@ -17,10 +17,17 @@ export class ItemManager {
 
     initLoot() {
         // Create some random chests/items
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 8; i++) {
             const x = (Math.random() - 0.5) * 150;
             const z = (Math.random() - 0.5) * 150;
             this.createChest(x, 0.5, z);
+        }
+
+        // Spawn some stamina items (juice bottles)
+        for (let i = 0; i < 12; i++) {
+            const x = (Math.random() - 0.5) * 150;
+            const z = (Math.random() - 0.5) * 150;
+            this.spawnJuiceBottle(x, z);
         }
     }
 
@@ -67,6 +74,32 @@ export class ItemManager {
         this.items.push(chest);
     }
 
+    spawnJuiceBottle(x, z) {
+        const bottle = new THREE.Group();
+        bottle.position.set(x, 0.5, z);
+
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.6, 8), new THREE.MeshStandardMaterial({ color: 0x27ae60 }));
+        body.position.y = 0.5;
+        bottle.add(body);
+
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.15, 8), new THREE.MeshStandardMaterial({ color: 0xc0392b }));
+        cap.position.y = 0.9;
+        bottle.add(cap);
+
+        bottle.castShadow = true;
+        bottle.receiveShadow = true;
+
+        bottle.userData = {
+            type: 'stamina',
+            gameId: this.generateID(),
+            gameName: 'JuiceBottle',
+            amount: 50
+        };
+
+        this.scene.add(bottle);
+        this.items.push(bottle);
+    }
+
     generateID() {
         return Math.random().toString(36).substr(2, 9).toUpperCase();
     }
@@ -83,7 +116,7 @@ export class ItemManager {
         for (const item of this.items) {
             // Use userData to track opened state and loot
             if (item.userData && item.userData.isOpened) continue;
-            
+
             const dist = playerPos.distanceTo(item.position);
             if (dist < 3) {
                 nearbyItem = item;
@@ -93,7 +126,14 @@ export class ItemManager {
 
         if (nearbyItem) {
             this.interactionPrompt.classList.remove('hidden');
-            this.interactionPrompt.innerText = `Aperte E para abrir (Contém: ${nearbyItem.userData.loot})`;
+            const data = nearbyItem.userData || {};
+            if (data.type === 'chest') {
+                this.interactionPrompt.innerText = `Press E to open (Contains: ${data.loot})`;
+            } else if (data.type === 'stamina') {
+                this.interactionPrompt.innerText = `Press E to collect ${data.gameName} (+${data.amount} Stamina)`;
+            } else {
+                this.interactionPrompt.innerText = `Press E to interact`;
+            }
             this.currentItem = nearbyItem;
         } else {
             this.interactionPrompt.classList.add('hidden');
@@ -104,7 +144,9 @@ export class ItemManager {
     tryInteract() {
         if (this.currentItem) {
             const data = this.currentItem.userData;
-            if (data && data.type === 'chest' && !data.isOpened) {
+            if (!data) return;
+
+            if (data.type === 'chest' && !data.isOpened) {
                 // Mark as opened
                 data.isOpened = true;
                 // Remove chest from scene
@@ -112,6 +154,17 @@ export class ItemManager {
                 // Give loot to player
                 this.player.collectItem(data.loot);
                 console.log(`Looted ${data.loot}!`);
+            } else if (data.type === 'stamina') {
+                // Stamina pickup -- apply to player
+                const amount = data.amount || 50;
+                if (this.player) {
+                    this.player.stamina = Math.min(100, this.player.stamina + amount);
+                }
+                // Remove bottle
+                this.scene.remove(this.currentItem);
+                // Mark removed so it's ignored
+                data.isOpened = true;
+                console.log(`Picked up stamina item: +${amount}`);
             }
         }
     }

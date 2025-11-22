@@ -64,6 +64,8 @@ class Game {
         const debugCheckbox = document.getElementById('setting-debug');
         const showIdsCheckbox = document.getElementById('setting-show-ids');
         const showTargetDistCheckbox = document.getElementById('setting-show-target-distance');
+        const volumeSlider = document.getElementById('setting-music-volume');
+        const volumeVal = document.getElementById('setting-music-volume-val');
         const cameraSelect = document.getElementById('setting-camera');
         
         const enemiesVal = document.getElementById('enemy-count-val');
@@ -81,6 +83,12 @@ class Game {
             if (s.debugMode) debugCheckbox.checked = true;
             if (s.showRenderedIds && showIdsCheckbox) showIdsCheckbox.checked = true;
             if (s.showTargetDistance && showTargetDistCheckbox) showTargetDistCheckbox.checked = true;
+            if (s.musicVolume !== undefined && volumeSlider && volumeVal) {
+                const v = parseInt(s.musicVolume, 10);
+                volumeSlider.value = v;
+                volumeVal.innerText = v;
+                this.bgMusicVolume = v / 100;
+            }
             if (s.cameraMode) cameraSelect.value = s.cameraMode;
         }
 
@@ -96,6 +104,7 @@ class Game {
                 debugMode: debugCheckbox.checked,
                 showRenderedIds: showIdsCheckbox ? showIdsCheckbox.checked : false,
                 showTargetDistance: showTargetDistCheckbox ? showTargetDistCheckbox.checked : false,
+                musicVolume: volumeSlider ? parseInt(volumeSlider.value) : Math.round(this.bgMusicVolume * 100),
                 cameraMode: cameraSelect.value
             };
             
@@ -121,6 +130,18 @@ class Game {
                 this.startGame(settings);
             }
         };
+
+        // Volume slider live update
+        if (volumeSlider) {
+            volumeSlider.oninput = () => {
+                const v = parseInt(volumeSlider.value, 10);
+                if (volumeVal) volumeVal.innerText = v;
+                this.bgMusicVolume = v / 100;
+                if (this.bgAudio) {
+                    try { this.bgAudio.volume = this.bgMusicVolume; } catch(e) {}
+                }
+            };
+        }
     }
 
     startGame(settings) {
@@ -145,7 +166,9 @@ class Game {
 
         // Event Listeners
         window.addEventListener('resize', () => this.onWindowResize(), false);
-        document.addEventListener('click', () => {
+        // Only lock pointer when clicking the game canvas (prevents accidental locks from UI clicks)
+        const canvas = this.renderer.domElement;
+        canvas.addEventListener('click', () => {
             if (!this.player.controls.isLocked && !this.player.isDead) {
                 this.player.lockControls();
             }
@@ -247,31 +270,74 @@ class Game {
     animate() {
         requestAnimationFrame(() => this.animate());
 
-        const dt = this.clock.getDelta();
+        try {
+            const dt = this.clock.getDelta();
 
         // Cap delta time to prevent huge jumps (e.g., when returning from pause/settings)
         const cappedDt = Math.min(dt, 0.1); // Max 100ms per frame
 
         // Only update game logic if not paused
         if (!this.isPaused && this.player && this.player.controls.isLocked) {
-            this.player.update(cappedDt);
-            const stormStatus = this.world.update(cappedDt, this.player.position);
-            if (stormStatus.inStorm) {
-                this.player.takeDamage(1 * cappedDt); // Reduced damage: 1 per second
+            // Execute updates with guarded logging to catch where errors originate
+            try {
+                this.player.update(cappedDt);
+            } catch (err) {
+                console.error('Error in player.update:', err);
             }
-            
-            this.enemyManager.update(cappedDt);
-            this.itemManager.update();
-            this.hud.update();
+
+            try {
+                const stormStatus = this.world.update(cappedDt, this.player.position);
+                if (stormStatus && stormStatus.inStorm) {
+                    this.player.takeDamage(1 * cappedDt); // Reduced damage: 1 per second
+                }
+            } catch (err) {
+                console.error('Error in world.update:', err);
+            }
+
+            try {
+                this.enemyManager.update(cappedDt);
+            } catch (err) {
+                console.error('Error in enemyManager.update:', err);
+            }
+
+            try {
+                this.itemManager.update();
+            } catch (err) {
+                console.error('Error in itemManager.update:', err);
+            }
+
+            try {
+                this.hud.update();
+            } catch (err) {
+                console.error('Error in hud.update:', err);
+            }
 
             // Check Victory
-            if (this.enemyManager.enemies.length === 0 && !this.player.isDead) {
-                this.hud.showVictory();
-                this.player.controls.unlock();
+            try {
+                if (this.enemyManager.enemies.length === 0 && !this.player.isDead) {
+                    this.hud.showVictory();
+                    this.player.controls.unlock();
+                }
+            } catch (err) {
+                console.error('Error in victory check:', err);
             }
         }
 
-        this.renderer.render(this.scene, this.camera);
+            this.renderer.render(this.scene, this.camera);
+        } catch (err) {
+            try {
+                console.error('Unhandled error in Game.animate:', err, {
+                    playerExists: !!this.player,
+                    playerWeaponCount: this.player ? (this.player.weapons ? this.player.weapons.length : 'no-weapons') : 'no-player',
+                    currentWeaponIndex: this.player ? this.player.currentWeaponIndex : 'no-player',
+                    hudExists: !!this.hud,
+                    hudSettings: this.hud ? this.hud.settings : null,
+                });
+            } catch (logErr) {
+                console.error('Error logging animate failure:', logErr);
+            }
+            throw err;
+        }
     }
 
 }

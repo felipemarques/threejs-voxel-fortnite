@@ -16,13 +16,13 @@
         <div id="hover-info" style="position:absolute; top:48%; left:50%; transform:translate(-50%, -100%); color:#fff; pointer-events:none; font-family:Arial; font-size:14px; text-shadow:0 0 6px rgba(0,0,0,0.8);"></div>
 
         <!-- Storm Timer -->
-        <div id="storm-timer">Tempestade fecha em: <span id="timer-value">00:30</span></div>
+        <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>
 
         <!-- Camera Mode Hint -->
         <div id="camera-hint" style="position: absolute; top: 60px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 12px; font-family: Arial;">Press V to toggle camera</div>
 
         <!-- Interaction Prompt -->
-        <div id="interaction-prompt" class="hidden">Aperte E para interagir</div>
+        <div id="interaction-prompt" class="hidden">Press E to interact</div>
 
     <!-- Dashboard -->
     <div id="dashboard" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
@@ -83,7 +83,7 @@
         <!-- Game Over / Victory Screen -->
         <div id="game-over-screen" class="hidden">
             <h1 id="game-over-title">VICTORY ROYALE!</h1>
-            <button id="restart-btn">Jogar Novamente</button>
+            <button id="restart-btn">Play Again</button>
         </div>
     </div>
     </div>
@@ -142,6 +142,13 @@
                         <input type="checkbox" id="setting-show-target-distance" style="width: 20px; height: 20px;">
                         <label for="setting-show-target-distance" style="margin: 0; color:white;">Show Target Distance (Top-Left)</label>
                     </div>
+                </div>
+            </div>
+            <div class="menu-group">
+                <label>Music Volume</label>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="range" id="setting-music-volume" min="0" max="100" value="50">
+                    <span id="setting-music-volume-val" style="color:white; font-weight:bold;">50</span>
                 </div>
             </div>
 

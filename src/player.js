@@ -23,6 +23,7 @@ export class Player {
         this.moveBackward = false;
         this.moveLeft = false;
         this.moveRight = false;
+        this.isSprinting = false;
         this.canJump = false;
         this.speed = 100.0;
         this.jumpHeight = 30.0;
@@ -171,6 +172,7 @@ export class Player {
         this.isAiming = false;
         this.baseFov = 75;
         this.aimFov = 20;
+        this.hitTimer = 0; // time remaining for hit/flinch animation
         
         this.mesh.castShadow = true;
         this.mesh.receiveShadow = true;
@@ -183,12 +185,7 @@ export class Player {
     }
 
     initControls() {
-        // Pointer Lock
-        document.addEventListener('click', () => {
-            if (!this.controls.isLocked && !this.isDead) {
-                this.controls.lock();
-            }
-        });
+        // Pointer Lock: handled by main game canvas click to avoid UI click conflicts
 
         // Movement
         const onKeyDown = (event) => {
@@ -212,6 +209,11 @@ export class Player {
                 case 'Digit3': this.switchWeapon(2); break;
                 case 'Digit4': this.switchWeapon(3); break;
                 case 'KeyR': this.reload(); break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    // start sprint input
+                    this.isSprinting = true;
+                    break;
                 case 'KeyV': this.toggleCameraMode(); break; // Toggle camera view
             }
 
@@ -227,6 +229,11 @@ export class Player {
                 case 'KeyS': this.moveBackward = false; break;
                 case 'ArrowRight':
                 case 'KeyD': this.moveRight = false; break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    // stop sprint input
+                    this.isSprinting = false;
+                    break;
             }
         };
 
@@ -256,7 +263,18 @@ export class Player {
     }
 
     lockControls() {
-        this.controls.lock();
+        // Guard against environments where Pointer Lock API is unavailable
+        const hasPointerLock = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
+        if (!hasPointerLock) {
+            console.warn('Pointer Lock API not available in this environment.');
+            return;
+        }
+
+        try {
+            this.controls.lock();
+        } catch (e) {
+            console.warn('Unable to lock pointer:', e);
+        }
     }
 
     toggleCameraMode() {
@@ -546,7 +564,10 @@ export class Player {
             // Let's simplify: Direct movement with some inertia
             
             // Apply speed with Collision Detection
-            const moveSpeed = this.speed * dt * 0.1;
+            const moving = moveVec.length() > 0;
+            let sprintMultiplier = 1.0;
+            if (this.isSprinting && moving && this.stamina > 0) sprintMultiplier = 1.9; // ~double speed
+            const moveSpeed = this.speed * dt * 0.1 * sprintMultiplier;
             const velocityVec = moveVec.multiplyScalar(moveSpeed);
 
             // X Axis Movement
@@ -586,18 +607,26 @@ export class Player {
                 this.canJump = true;
             }
 
-            // Track distance traveled and drain stamina
+            // Track distance traveled
             if (this.previousPosition.length() > 0) {
                 const distance = this.mesh.position.distanceTo(this.previousPosition);
                 this.distanceTraveled += distance;
-                
-                // Drain stamina while moving (0.5 stamina per 10 meters)
-                if (distance > 0 && this.stamina > 0) {
-                    const staminaDrain = (distance / 10) * 0.5;
-                    this.stamina = Math.max(0, this.stamina - staminaDrain);
-                }
             }
             this.previousPosition.copy(this.mesh.position);
+
+            // Handle stamina drain/recovery
+            if (this.isSprinting && moving && this.stamina > 0) {
+                // Drain stamina per second while sprinting
+                const drain = 20 * dt; // 20 stamina per second
+                this.stamina = Math.max(0, this.stamina - drain);
+                if (this.stamina <= 0) {
+                    this.isSprinting = false; // stop sprinting when out
+                }
+            } else {
+                // Regenerate stamina when not sprinting
+                const regen = 10 * dt; // 10 stamina per second
+                this.stamina = Math.min(100, this.stamina + regen);
+            }
 
             // Camera Follow
             this.camera.position.copy(this.mesh.position);
@@ -646,15 +675,17 @@ export class Player {
     updateAnimations(dt) {
         const isMoving = this.moveForward || this.moveBackward || this.moveLeft || this.moveRight;
         
-        // Leg Animation
+        // Leg Animation (faster when sprinting)
+        const baseAnimSpeed = 10;
+        const sprintFactor = (this.isSprinting && isMoving) ? 1.8 : 1.0;
         if (isMoving) {
-            this.animTime += dt * 10;
-            const angle = Math.sin(this.animTime) * 0.5;
+            this.animTime += dt * baseAnimSpeed * sprintFactor;
+            const angle = Math.sin(this.animTime) * (0.5 * sprintFactor);
             this.leftLegPivot.rotation.x = angle;
             this.rightLegPivot.rotation.x = -angle;
         } else {
-            this.leftLegPivot.rotation.x = THREE.MathUtils.lerp(this.leftLegPivot.rotation.x, 0, dt * 10);
-            this.rightLegPivot.rotation.x = THREE.MathUtils.lerp(this.rightLegPivot.rotation.x, 0, dt * 10);
+            this.leftLegPivot.rotation.x = THREE.MathUtils.lerp(this.leftLegPivot.rotation.x, 0, dt * baseAnimSpeed);
+            this.rightLegPivot.rotation.x = THREE.MathUtils.lerp(this.rightLegPivot.rotation.x, 0, dt * baseAnimSpeed);
         }
 
         // Arm Animation
@@ -694,9 +725,9 @@ export class Player {
         } else {
             // Idle / Walking Arms
             if (isMoving) {
-                const angle = Math.sin(this.animTime) * 0.5;
-                this.leftArmPivot.rotation.x = -angle;
-                this.rightArmPivot.rotation.x = angle;
+                const armSwing = Math.sin(this.animTime) * 0.5 * sprintFactor;
+                this.leftArmPivot.rotation.x = -armSwing;
+                this.rightArmPivot.rotation.x = armSwing;
             } else {
                 this.leftArmPivot.rotation.x = THREE.MathUtils.lerp(this.leftArmPivot.rotation.x, 0, dt * 10);
                 this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(this.rightArmPivot.rotation.x, 0, dt * 10);
@@ -704,6 +735,16 @@ export class Player {
             // Reset Z
             this.leftArmPivot.rotation.z = THREE.MathUtils.lerp(this.leftArmPivot.rotation.z, 0, dt * 10);
             this.rightArmPivot.rotation.z = THREE.MathUtils.lerp(this.rightArmPivot.rotation.z, 0, dt * 10);
+        }
+
+        // Hit / Flinch animation: override arms briefly when player is hit
+        if (this.hitTimer > 0) {
+            this.hitTimer -= dt;
+            const t = Math.max(0, this.hitTimer) / 0.6; // 0..1
+            const flinchAngle = THREE.MathUtils.lerp(-Math.PI / 2.2, 0, 1 - t);
+            // Move both arms up defensively
+            this.leftArmPivot.rotation.x = THREE.MathUtils.lerp(this.leftArmPivot.rotation.x, flinchAngle, dt * 20);
+            this.rightArmPivot.rotation.x = THREE.MathUtils.lerp(this.rightArmPivot.rotation.x, flinchAngle, dt * 20);
         }
     }
 
@@ -776,6 +817,8 @@ export class Player {
             this.health = 0;
             this.die();
         }
+        // Trigger hit animation
+        this.hitTimer = 0.6; // 600ms flinch
     }
 
     die() {

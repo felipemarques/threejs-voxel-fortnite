@@ -133,6 +133,8 @@ class Bot {
         this.mesh.receiveShadow = true;
         
         this.animTime = 0;
+        this.attackAnimTime = 0;
+        this.attackAnimDuration = 0.5;
 
         this.createHealthBar();
     }
@@ -200,18 +202,10 @@ class Bot {
             if (dist < this.attackRange) { // Can attack if in melee range
                 const now = performance.now() / 1000;
                 if (now - this.lastAttack > this.attackCooldown) {
+                    // Apply damage and trigger attack animation (handled below)
                     player.takeDamage(this.damage);
                     this.lastAttack = now;
-
-                    // Attack Animation (Raise arms)
-                    this.leftArmPivot.rotation.x = -Math.PI / 2;
-                    this.rightArmPivot.rotation.x = -Math.PI / 2;
-                    setTimeout(() => {
-                        if(!this.isDead) {
-                            this.leftArmPivot.rotation.x = 0;
-                            this.rightArmPivot.rotation.x = 0;
-                        }
-                    }, 500);
+                    this.attackAnimTime = this.attackAnimDuration;
                 }
             }
         } else {
@@ -274,6 +268,25 @@ class Bot {
             this.rightLegPivot.rotation.x = 0;
             this.leftArmPivot.rotation.x = -Math.PI / 3; // Zombie pose
             this.rightArmPivot.rotation.x = -Math.PI / 3;
+        }
+
+        // Attack animation (swing arms and slight lunge)
+        if (this.attackAnimTime > 0) {
+            this.attackAnimTime = Math.max(0, this.attackAnimTime - dt);
+            const progress = 1 - (this.attackAnimTime / this.attackAnimDuration); // 0..1
+            // Swing using sine for smooth motion
+            const swing = Math.sin(progress * Math.PI) * 1.5; // swing amplitude
+            this.leftArmPivot.rotation.x = -Math.PI / 2 + swing * 0.2;
+            this.rightArmPivot.rotation.x = -Math.PI / 2 - swing * 0.2;
+
+            // Lunge forward a bit at attack peak
+            if (progress > 0.3 && progress < 0.7) {
+                const forward = new THREE.Vector3();
+                this.mesh.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                this.position.add(forward.multiplyScalar(0.02));
+            }
         }
     }
 
