@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "Voxel Fortnite Prototype with Three.js",
   "main": "src/main.js",
-    "scripts": {
+  "scripts": {
     "dev": "vite",
-    "build": "vite build --base /threejs-voxel-fortnite/dist/",
-    "build:repo": "vite build --base /threejs-voxel-fortnite/",
-    "preview": "vite preview --strictPort"
+    "build": "vite build",
+    "preview": "vite preview --strictPort",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +17,7 @@
     "three": "^0.160.0"
   },
   "devDependencies": {
+    "gh-pages": "^5.0.0",
     "vite": "^5.0.0"
   }
 }
