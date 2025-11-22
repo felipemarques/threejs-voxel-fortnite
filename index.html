@@ -142,6 +142,10 @@
                         <input type="checkbox" id="setting-show-target-distance" style="width: 20px; height: 20px;">
                         <label for="setting-show-target-distance" style="margin: 0; color:white;">Show Target Distance (Top-Left)</label>
                     </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                        <input type="checkbox" id="setting-touch-controls" style="width:20px; height:20px;">
+                        <label for="setting-touch-controls" style="margin:0; color:white;">Enable Touch Controls (Mobile)</label>
+                    </div>
                 </div>
             </div>
             <div class="menu-group">
@@ -157,5 +161,7 @@
     </div>
 
     <script type="module" src="/src/main.js"></script>
+    <!-- Touch controls container (populated/shown by JS when enabled) -->
+    <div id="touch-controls" class="hidden" aria-hidden="true"></div>
 </body>
 </html>

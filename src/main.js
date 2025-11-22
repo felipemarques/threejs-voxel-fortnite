@@ -5,6 +5,7 @@ import { Player } from './player.js';
 import { HUD } from './hud.js';
 import { EnemyManager } from './enemies.js';
 import { ItemManager } from './items.js';
+import { TouchControls } from './touchControls.js';
 
 
 class Game {
@@ -70,6 +71,7 @@ class Game {
         const volumeSlider = document.getElementById('setting-music-volume');
         const volumeVal = document.getElementById('setting-music-volume-val');
         const cameraSelect = document.getElementById('setting-camera');
+        const touchCheckbox = document.getElementById('setting-touch-controls');
         
         const enemiesVal = document.getElementById('enemy-count-val');
         const stormVal = document.getElementById('storm-time-val');
@@ -93,6 +95,7 @@ class Game {
                 this.bgMusicVolume = v / 100;
             }
             if (s.cameraMode) cameraSelect.value = s.cameraMode;
+            if (s.useTouchControls !== undefined && touchCheckbox) touchCheckbox.checked = !!s.useTouchControls;
         }
 
         // Update labels
@@ -109,6 +112,8 @@ class Game {
                 showTargetDistance: showTargetDistCheckbox ? showTargetDistCheckbox.checked : false,
                 musicVolume: volumeSlider ? parseInt(volumeSlider.value) : Math.round(this.bgMusicVolume * 100),
                 cameraMode: cameraSelect.value
+            ,
+                useTouchControls: touchCheckbox ? touchCheckbox.checked : false
             };
             
             // Save Settings
@@ -145,6 +150,16 @@ class Game {
                 }
             };
         }
+        // Touch checkbox live update (persist immediately)
+        if (touchCheckbox) {
+            touchCheckbox.onchange = () => {
+                try {
+                    const saved = JSON.parse(localStorage.getItem('voxel-fortnite-settings') || '{}');
+                    saved.useTouchControls = touchCheckbox.checked;
+                    localStorage.setItem('voxel-fortnite-settings', JSON.stringify(saved));
+                } catch (e) {}
+            };
+        }
     }
 
     startGame(settings) {
@@ -179,6 +194,16 @@ class Game {
 
         // Setup pause menu buttons
         this.setupPauseMenu();
+
+        // Touch controls: detect mobile or respect user setting
+        try {
+            const isMobileUA = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Tablet/i.test(navigator.userAgent);
+            const coarsePointer = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+            const wantTouch = !!settings.useTouchControls || isMobileUA || coarsePointer;
+            if (wantTouch) {
+                this.touchControls = new TouchControls(this.player);
+            }
+        } catch (e) {}
 
         this.animate();
     }

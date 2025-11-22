@@ -370,3 +370,77 @@ html {
     transform: translateY(5px);
     box-shadow: none;
 }
+
+/* Touch controls (mobile) */
+#touch-controls {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    pointer-events: none; /* children will enable pointer events where necessary */
+    z-index: 200;
+}
+
+.tc-joystick {
+    position: absolute;
+    left: 20px;
+    /* raise joystick to avoid overlapping HUD bottom bars */
+    bottom: 110px;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.15);
+    pointer-events: auto;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tc-stick {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    transform: translate(0,0);
+}
+
+.tc-buttons {
+    position: absolute;
+    right: 20px;
+    /* raise buttons to avoid overlapping weapon info */
+    bottom: 110px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    pointer-events: auto;
+}
+
+.tc-btn {
+    width: 84px;
+    height: 84px;
+    border-radius: 18px;
+    background: rgba(241, 196, 15, 0.9);
+    color: #111;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.5);
+}
+
+/* Smaller fire button when landscape narrow screens */
+@media (max-width: 520px) {
+    .tc-btn { width: 64px; height: 64px; border-radius: 14px; }
+    .tc-joystick { width: 110px; height: 110px; bottom: 90px; }
+    .tc-buttons { bottom: 90px; }
+}
+
+/* If the screen height is small, lift controls a bit more */
+@media (max-height: 640px) {
+    .tc-joystick { bottom: 140px; }
+    .tc-buttons { bottom: 140px; }
+}
