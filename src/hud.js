@@ -332,11 +332,24 @@ export class HUD {
         document.getElementById('restart-btn').onclick = () => {
             location.reload();
         };
+        // If this is a death message, trigger defeat audio sequence on the global game object
+        try {
+            if (typeof window !== 'undefined' && window.game && message && message.toUpperCase().includes('DIED')) {
+                if (typeof window.game.playEndSequence === 'function') {
+                    window.game.playEndSequence('src/assets/mixkit-player-losing-or-failing.wav');
+                }
+            }
+        } catch (e) { }
     }
 
     showVictory() {
         this.showGameOver("VICTORY ROYALE!");
         document.getElementById('game-over-title').style.color = '#f1c40f'; // Gold color
+        try {
+            if (typeof window !== 'undefined' && window.game && typeof window.game.playEndSequence === 'function') {
+                window.game.playEndSequence('src/assets/game-level-completed-envato-mixkit.co.wav');
+            }
+        } catch (e) { }
     }
 }
 

@@ -44,6 +44,8 @@ class Game {
         // Background music (initialized on user gesture)
         this.bgAudio = null;
         this.bgMusicVolume = 0.5;
+        this._endSequenceAudio = null;
+        this._prevBgVolume = null;
         // ESC key to toggle pause
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Escape') {
@@ -351,6 +353,51 @@ class Game {
     }
 
 }
+
+// Play an end-of-game sequence: lower background music to 20% and play an SFX/music file.
+Game.prototype.playEndSequence = function(sfxPath, options = {}) {
+    try {
+        // Lower background music to 20% of configured volume
+        if (this.bgAudio) {
+            try {
+                this._prevBgVolume = this.bgAudio.volume;
+            } catch (e) { this._prevBgVolume = this.bgMusicVolume; }
+            try { this.bgAudio.volume = (this.bgMusicVolume || 0.5) * 0.2; } catch (e) {}
+        }
+
+        // Stop any previous end-sequence audio
+        if (this._endSequenceAudio) {
+            try { this._endSequenceAudio.pause(); } catch (e) {}
+            this._endSequenceAudio = null;
+        }
+
+        // Play provided SFX/music
+        const a = new Audio(sfxPath);
+        a.loop = options.loop || false;
+        a.volume = options.volume !== undefined ? options.volume : 1.0;
+        a.preload = 'auto';
+        const playPromise = a.play();
+        if (playPromise && typeof playPromise.then === 'function') {
+            playPromise.catch(() => {
+                // ignore playback errors (autoplay restrictions)
+            });
+        }
+        this._endSequenceAudio = a;
+
+        // Optionally restore background volume after the audio ends
+        a.addEventListener('ended', () => {
+            try {
+                if (this.bgAudio && this._prevBgVolume !== null) {
+                    this.bgAudio.volume = this._prevBgVolume;
+                }
+            } catch (e) {}
+            this._endSequenceAudio = null;
+            this._prevBgVolume = null;
+        });
+    } catch (e) {
+        console.warn('playEndSequence error:', e);
+    }
+};
 
 // Diagnostic helper: logs basic information about scene meshes and their materials
 Game.prototype._logRenderMaterialDiagnostics = function(originalError) {
