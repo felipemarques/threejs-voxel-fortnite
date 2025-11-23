@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voxel Fortnite Prototype</title>
-  <script type="module" crossorigin src="/threejs-voxel-fortnite/dist/assets/index-Bga9EYcl.js"></script>
-  <link rel="stylesheet" crossorigin href="/threejs-voxel-fortnite/dist/assets/index-BSvmbiko.css">
+  <script type="module" crossorigin src="/threejs-voxel-fortnite/dist/assets/index-Bvnlsaq8.js"></script>
+  <link rel="stylesheet" crossorigin href="/threejs-voxel-fortnite/dist/assets/index-BUsRgHoJ.css">
 </head>
 <body>
     <div id="game-container"></div>
@@ -149,11 +149,17 @@
                     </div>
                 </div>
             </div>
+            
             <div class="menu-group">
-                <label>Music Volume</label>
+                <label>Background Music</label>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <input type="checkbox" id="setting-music-enabled" checked style="width:20px; height:20px;">
+                    <label for="setting-music-enabled" style="margin:0; color:white;">Enable Background Music</label>
+                </div>
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <input type="range" id="setting-music-volume" min="0" max="100" value="50">
-                    <span id="setting-music-volume-val" style="color:white; font-weight:bold;">50</span>
+                    <label style="margin:0; min-width:60px;">Volume:</label>
+                    <input type="range" id="setting-music-volume" min="0" max="100" value="50" style="flex:1;">
+                    <span id="setting-music-volume-val" style="color:white; font-weight:bold; min-width:35px;">50</span>
                 </div>
             </div>
 
