@@ -365,11 +365,12 @@ export class Player {
                 case 'KeyC': 
                     // Toggle crouch
                     this.isCrouching = !this.isCrouching;
+                    if (this.isCrouching) this.isSprinting = false; // stop sprint when crouching
                     break;
                 case 'ShiftLeft':
                 case 'ShiftRight':
                     // start sprint input
-                    this.isSprinting = true;
+                    if (!this.isCrouching) this.isSprinting = true;
                     break;
                 case 'KeyV': this.toggleCameraMode(); break; // Toggle camera view
             }
@@ -776,7 +777,7 @@ export class Player {
             // Apply speed with Collision Detection
             const moving = moveVec.length() > 0;
             let sprintMultiplier = 1.0;
-            if (this.isSprinting && moving && this.stamina > 0) sprintMultiplier = 1.9; // ~double speed
+            if (this.isSprinting && !this.isCrouching && moving && this.stamina > 0) sprintMultiplier = 1.9; // ~double speed
             const moveSpeed = this.speed * dt * 0.1 * sprintMultiplier;
             const velocityVec = moveVec.multiplyScalar(moveSpeed);
 
@@ -822,7 +823,7 @@ export class Player {
             this.previousPosition.copy(this.mesh.position);
 
             // Handle stamina drain/recovery
-            if (this.isSprinting && moving && this.stamina > 0) {
+            if (this.isSprinting && !this.isCrouching && moving && this.stamina > 0) {
                 // Drain stamina per second while sprinting
                 const drain = 20 * dt; // 20 stamina per second
                 this.stamina = Math.max(0, this.stamina - drain);
@@ -1104,4 +1105,3 @@ export class Player {
         return false;
     }
 }
-

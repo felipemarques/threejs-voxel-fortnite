@@ -9,6 +9,7 @@ export class ItemManager {
         this.interactionPrompt = document.getElementById('interaction-prompt');
         this.mapSize = (settings && settings.mapSize) ? settings.mapSize : DEFAULT_MAP_SIZE;
         this.spawnSpan = this.mapSize * 0.75; // Keep loot inside playable area with margin
+        this.glowRadius = 7; // Distance to show glow particles
         
         this.initLoot();
         
@@ -20,14 +21,14 @@ export class ItemManager {
 
     initLoot() {
         // Create some random chests/items
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < 24; i++) {
             const x = (Math.random() - 0.5) * this.spawnSpan;
             const z = (Math.random() - 0.5) * this.spawnSpan;
             this.createChest(x, 0.5, z);
         }
 
         // Spawn some stamina items (juice bottles)
-        for (let i = 0; i < 24; i++) {
+        for (let i = 0; i < 36; i++) {
             const x = (Math.random() - 0.5) * this.spawnSpan;
             const z = (Math.random() - 0.5) * this.spawnSpan;
             this.spawnJuiceBottle(x, z);
@@ -73,6 +74,11 @@ export class ItemManager {
             loot: loot // Store loot in userData
         };
         
+        const glow = this.createGlowEffect();
+        glow.position.y = 1.0;
+        chest.add(glow);
+        chest.userData.glow = glow;
+        
         this.scene.add(chest);
         this.items.push(chest);
     }
@@ -98,6 +104,11 @@ export class ItemManager {
             gameName: 'JuiceBottle',
             amount: 50
         };
+        
+        const glow = this.createGlowEffect();
+        glow.position.y = 0.9;
+        bottle.add(glow);
+        bottle.userData.glow = glow;
 
         this.scene.add(bottle);
         this.items.push(bottle);
@@ -121,6 +132,7 @@ export class ItemManager {
             if (item.userData && item.userData.isOpened) continue;
 
             const dist = playerPos.distanceTo(item.position);
+            this.updateGlow(item, dist);
             if (dist < 3) {
                 nearbyItem = item;
                 break;
@@ -170,6 +182,45 @@ export class ItemManager {
                 console.log(`Picked up stamina item: +${amount}`);
             }
         }
+    }
+
+    updateGlow(item, dist) {
+        if (!item || !item.userData || !item.userData.glow) return;
+        const glow = item.userData.glow;
+        const shouldShow = !item.userData.isOpened && dist < this.glowRadius;
+        glow.visible = shouldShow;
+        if (shouldShow) {
+            glow.rotation.y += 0.02;
+            glow.position.y = (item.userData.type === 'chest' ? 1 : 0.9) + Math.sin(performance.now() / 500) * 0.1;
+        }
+    }
+
+    createGlowEffect() {
+        const particleCount = 40;
+        const positions = new Float32Array(particleCount * 3);
+        const radius = 0.6;
+        for (let i = 0; i < particleCount; i++) {
+            const r = radius * Math.random();
+            const theta = Math.random() * Math.PI * 2;
+            const y = Math.random() * radius * 0.6;
+            positions[i * 3] = Math.cos(theta) * r;
+            positions[i * 3 + 1] = y;
+            positions[i * 3 + 2] = Math.sin(theta) * r;
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const material = new THREE.PointsMaterial({
+            color: 0xffd166,
+            size: 0.15,
+            transparent: true,
+            opacity: 0.9,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            sizeAttenuation: true
+        });
+        const points = new THREE.Points(geometry, material);
+        points.visible = false;
+        return points;
     }
 
 }
