@@ -10,6 +10,7 @@ export class ItemManager {
         this.mapSize = (settings && settings.mapSize) ? settings.mapSize : DEFAULT_MAP_SIZE;
         this.spawnSpan = this.mapSize * 0.75; // Keep loot inside playable area with margin
         this.glowRadius = 7; // Distance to show glow particles
+        this.world = null;
         
         this.initLoot();
         
@@ -17,6 +18,11 @@ export class ItemManager {
         document.addEventListener('keydown', (e) => {
             if (e.code === 'KeyE') this.tryInteract();
         });
+    }
+
+    setWorld(world) {
+        this.world = world;
+        this.realignItemsToGround();
     }
 
     initLoot() {
@@ -42,7 +48,11 @@ export class ItemManager {
 
     spawnChest(x, z) {
         const chest = new THREE.Group();
-        chest.position.set(x, 0.5, z);
+        let y = 0.5;
+        if (this.world && typeof this.world.getHeightAt === 'function') {
+            y = this.world.getHeightAt(x, z) + 0.5;
+        }
+        chest.position.set(x, y, z);
         
         const boxGeo = new THREE.BoxGeometry(1, 0.8, 0.6);
         const boxMat = new THREE.MeshStandardMaterial({ color: 0xf1c40f, roughness: 0.3, metalness: 0.5 });
@@ -85,7 +95,11 @@ export class ItemManager {
 
     spawnJuiceBottle(x, z) {
         const bottle = new THREE.Group();
-        bottle.position.set(x, 0.5, z);
+        let y = 0.5;
+        if (this.world && typeof this.world.getHeightAt === 'function') {
+            y = this.world.getHeightAt(x, z) + 0.5;
+        }
+        bottle.position.set(x, y, z);
 
         const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.6, 8), new THREE.MeshStandardMaterial({ color: 0x27ae60 }));
         body.position.y = 0.5;
@@ -182,6 +196,16 @@ export class ItemManager {
                 console.log(`Picked up stamina item: +${amount}`);
             }
         }
+    }
+
+    realignItemsToGround() {
+        if (!this.world || typeof this.world.getHeightAt !== 'function') return;
+        this.items.forEach(item => {
+            const pos = item.position;
+            const baseY = this.world.getHeightAt(pos.x, pos.z);
+            const offset = (item.userData && item.userData.type === 'chest') ? 0.5 : 0.5;
+            item.position.y = baseY + offset;
+        });
     }
 
     updateGlow(item, dist) {

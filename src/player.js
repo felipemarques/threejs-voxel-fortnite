@@ -8,6 +8,7 @@ export class Player {
         this.camera = camera;
         this.scene = scene;
         this.worldObjects = worldObjects;
+        this.world = null;
 
         // Stats
         this.health = 100;
@@ -813,6 +814,15 @@ export class Player {
                 this.velocity.y = 0;
                 this.mesh.position.y = 0;
                 this.canJump = true;
+            }
+            // Clamp to terrain height if available
+            if (this.world && typeof this.world.getHeightAt === 'function') {
+                const groundY = this.world.getHeightAt(this.mesh.position.x, this.mesh.position.z);
+                if (this.mesh.position.y < groundY) {
+                    this.mesh.position.y = groundY;
+                    this.velocity.y = 0;
+                    this.canJump = true;
+                }
             }
 
             // Track distance traveled

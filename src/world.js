@@ -12,6 +12,7 @@ export class World {
         this.halfMapSize = this.mapSize / 2;
         this.stormRadius = this.halfMapSize;
         this.initialStormRadius = this.stormRadius;
+        this._heightFn = this._buildHeightFn();
         
         const stormTime = settings ? settings.stormTime : 180; // seconds
         this.stormShrinkRate = this.stormRadius / stormTime; 
@@ -28,9 +29,16 @@ export class World {
 
     createEnvironment() {
         const randCoord = (spread = 1) => (Math.random() - 0.5) * (this.mapSize * spread);
+        const groundY = (x, z) => (this.getHeightAt ? this.getHeightAt(x, z) : 0);
         
         // Ground
         const groundGeo = new THREE.PlaneGeometry(this.mapSize, this.mapSize, 128, 128);
+        // Flat ground (no height displacement to avoid navigation issues)
+        const pos = groundGeo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            pos.setZ(i, 0);
+        }
+        pos.needsUpdate = true;
         
         // Improved Ground Material (Vertex Colors for variation)
         const count = groundGeo.attributes.position.count;
@@ -65,20 +73,32 @@ export class World {
         for (let i = 0; i < 100; i++) {
             const x = randCoord(0.9);
             const z = randCoord(0.9);
+            const y = groundY(x, z);
             
             const type = Math.random() > 0.5 ? 'Oak' : 'Pine';
             const tree = this.createTree(x, z, type);
+            tree.position.y = y;
             tree.userData = { gameId: this.generateID(), gameName: `Tree_${type}`, type: 'tree' };
             this.scene.add(tree);
             this.objects.push(tree);
         }
 
-        // Rocks
-        for (let i = 0; i < 60; i++) {
+        // Rocks (more variety)
+        const rockMakers = [
+            (x, z) => this.createRock(x, z),
+            (x, z, y) => this.createRockPillar(x, z, y),
+            (x, z, y) => this.createFlatBoulder(x, z, y),
+            (x, z, y) => this.createCrystalShard(x, z, y),
+            (x, z, y) => this.createStackedRock(x, z, y),
+            (x, z, y) => this.createBasaltCluster(x, z, y)
+        ];
+        for (let i = 0; i < 90; i++) {
             const x = randCoord(0.9);
             const z = randCoord(0.9);
-            const rock = this.createRock(x, z);
-            rock.userData = { gameId: this.generateID(), gameName: 'Rock' };
+            const y = groundY(x, z);
+            const maker = rockMakers[i % rockMakers.length];
+            const rock = maker(x, z, y);
+            rock.userData = { gameId: this.generateID(), gameName: 'Rock', type: 'rock' };
             this.scene.add(rock);
             this.objects.push(rock);
         }
@@ -86,7 +106,9 @@ export class World {
         for (let i = 0; i < 80; i++) {
             const x = randCoord(0.85);
             const z = randCoord(0.85);
+            const y = groundY(x, z);
             const bush = this.createBush(x, z);
+            bush.position.y = y;
             bush.userData = { gameId: this.generateID(), gameName: 'Bush' };
             this.scene.add(bush);
             this.objects.push(bush);
@@ -96,7 +118,9 @@ export class World {
         for (let i = 0; i < 400; i++) {
             const x = randCoord(0.95);
             const z = randCoord(0.95);
+            const y = groundY(x, z);
             const g = this.createGrassClump(x, z);
+            g.position.y = y;
             this.scene.add(g);
         }
         
@@ -104,7 +128,9 @@ export class World {
         for (let i = 0; i < 16; i++) {
             const x = randCoord(0.75);
             const z = randCoord(0.75);
+            const y = groundY(x, z);
             const house = this.createHouse(x, z);
+            house.position.y = y;
             house.userData = { gameId: this.generateID(), gameName: 'House', type: 'house' };
             this.scene.add(house);
             this.objects.push(house);
@@ -117,12 +143,39 @@ export class World {
         for (let i = 0; i < 24; i++) {
             const x = randCoord(0.8);
             const z = randCoord(0.8);
+            const y = groundY(x, z);
             const type = Math.random() > 0.6 ? 'truck' : 'car';
             const vehicle = this.createVehicle(x, z, type);
+            vehicle.position.y = y;
             vehicle.userData = { gameId: this.generateID(), gameName: `Vehicle_${type}`, type: 'vehicle' };
             this.scene.add(vehicle);
             this.objects.push(vehicle);
         }    
+
+        // Elevated natural plateaus with gentle ramps
+        for (let i = 0; i < 6; i++) {
+            const x = randCoord(0.6);
+            const z = randCoord(0.6);
+            const height = 6 + Math.random() * 6;
+            const radius = 8 + Math.random() * 6;
+            const y = groundY(x, z);
+            const plateau = this.createPlateau(x, z, radius, height, y);
+            plateau.userData = { gameId: this.generateID(), gameName: 'Plateau', type: 'house' };
+            this.scene.add(plateau);
+            this.objects.push(plateau);
+        }
+
+        // Small 2‑story buildings with ramps
+        for (let i = 0; i < 8; i++) {
+            const x = randCoord(0.7);
+            const z = randCoord(0.7);
+            const y = groundY(x, z);
+            const b = this.createSmallBuilding(x, z);
+            b.position.y = y;
+            b.userData = { gameId: this.generateID(), gameName: 'SmallBuilding', type: 'house' };
+            this.scene.add(b);
+            this.objects.push(b);
+        }
     }
 
     generateID() {
@@ -213,7 +266,7 @@ export class World {
         return treeGroup;
     }
 
-    createRock(x, z) {
+    createRock(x, z, baseY = 0) {
         // Irregular rock using icosahedron + vertex jitter
         const baseSize = 0.6 + Math.random() * 1.4;
         const geo = new THREE.IcosahedronGeometry(baseSize, 1);
@@ -230,7 +283,7 @@ export class World {
 
         const rockMat = new THREE.MeshStandardMaterial({ color: 0x7f8c8d, roughness: 1 });
         const rock = new THREE.Mesh(geo, rockMat);
-        rock.position.set(x, baseSize / 2, z);
+        rock.position.set(x, baseY + baseSize / 2, z);
         rock.rotation.set(Math.random() * 0.5, Math.random() * Math.PI, Math.random() * 0.5);
         rock.castShadow = true;
         rock.receiveShadow = true;
@@ -244,6 +297,79 @@ export class World {
         }
 
         return rock;
+    }
+
+    createRockPillar(x, z, baseY = 0) {
+        const height = 2.5 + Math.random() * 2.5;
+        const radiusTop = 0.4 + Math.random() * 0.3;
+        const radiusBottom = radiusTop + 0.5;
+        const geo = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 8, 1);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x6d6d6d, roughness: 1 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, baseY + height / 2, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        return mesh;
+    }
+
+    createFlatBoulder(x, z, baseY = 0) {
+        const w = 2 + Math.random() * 2;
+        const h = 0.8 + Math.random() * 0.6;
+        const d = 1.5 + Math.random() * 1;
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x8b8b8b, roughness: 1 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, baseY + h / 2, z);
+        mesh.rotation.y = Math.random() * Math.PI;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        return mesh;
+    }
+
+    createCrystalShard(x, z, baseY = 0) {
+        const height = 2 + Math.random() * 2;
+        const geo = new THREE.ConeGeometry(0.6 + Math.random() * 0.4, height, 6);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x9b59b6, roughness: 0.7, metalness: 0.2, emissive: 0x3d2b64, emissiveIntensity: 0.25 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, baseY + height / 2, z);
+        mesh.rotation.y = Math.random() * Math.PI;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        return mesh;
+    }
+
+    createStackedRock(x, z, baseY = 0) {
+        const group = new THREE.Group();
+        const base = this.createRock(0, 0, 0);
+        group.add(base);
+        const mid = this.createRock(0, 0);
+        mid.scale.set(0.6, 0.6, 0.6);
+        mid.position.set(0.3, mid.position.y + 0.9, -0.2);
+        group.add(mid);
+        const top = this.createRock(0, 0);
+        top.scale.set(0.4, 0.4, 0.4);
+        top.position.set(-0.2, top.position.y + 1.5, 0.3);
+        group.add(top);
+        group.position.set(x, baseY, z);
+        group.traverse(o => { o.castShadow = true; o.receiveShadow = true; });
+        return group;
+    }
+
+    createBasaltCluster(x, z, baseY = 0) {
+        const group = new THREE.Group();
+        const columns = 3 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < columns; i++) {
+            const h = 1 + Math.random() * 2;
+            const geo = new THREE.CylinderGeometry(0.35, 0.4, h, 6);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x4b4b4b, roughness: 0.9 });
+            const c = new THREE.Mesh(geo, mat);
+            c.position.set((Math.random() - 0.5) * 0.9, h / 2, (Math.random() - 0.5) * 0.9);
+            c.castShadow = true;
+            c.receiveShadow = true;
+            group.add(c);
+        }
+        group.position.set(x, baseY, z);
+        return group;
     }
 
     createBush(x, z) {
@@ -454,6 +580,119 @@ export class World {
         return houseGroup;
     }
 
+    createPlateau(x, z, radius = 10, height = 8, baseY = 0) {
+        const g = new THREE.Group();
+        const mat = new THREE.MeshStandardMaterial({ color: 0x7f7f7f, roughness: 1 });
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 1.05, height, 16, 1), mat);
+        cyl.position.set(0, height / 2, 0);
+        cyl.castShadow = true;
+        cyl.receiveShadow = true;
+        g.add(cyl);
+
+        // Ramp to top
+        const rampLength = radius * 1.4;
+        const rampHeight = height;
+        const rampWidth = radius * 0.8;
+        const rampGeo = new THREE.BoxGeometry(rampWidth, rampHeight, rampLength);
+        const ramp = new THREE.Mesh(rampGeo, new THREE.MeshStandardMaterial({ color: 0x8e8e8e, roughness: 1 }));
+        ramp.castShadow = true;
+        ramp.receiveShadow = true;
+        const angle = Math.atan(rampHeight / rampLength);
+        ramp.rotation.x = -angle;
+        ramp.position.set(0, rampHeight / 2, radius);
+        ramp.userData = { type: 'house' };
+        g.add(ramp);
+
+        // Small guard rail
+        const railGeo = new THREE.BoxGeometry(rampWidth, 0.2, rampLength);
+        const rail = new THREE.Mesh(railGeo, new THREE.MeshStandardMaterial({ color: 0x6c6c6c }));
+        rail.position.set(0, rampHeight, radius);
+        rail.rotation.x = ramp.rotation.x;
+        rail.castShadow = true;
+        g.add(rail);
+
+        g.position.set(x, baseY, z);
+        g.userData = { type: 'house' };
+        return g;
+    }
+
+    createSmallBuilding(x, z) {
+        const g = new THREE.Group();
+        g.position.set(x, 0, z);
+        g.rotation.y = Math.random() * Math.PI * 2;
+
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x7f8c8d });
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0xbdc3c7 });
+        const width = 8;
+        const depth = 8;
+        const height = 6;
+        const thick = 0.35;
+        const doorGap = 2.2;
+        const halfW = width / 2;
+        const halfD = depth / 2;
+
+        // Walls (split front wall to leave doorway gap)
+        const backWall = new THREE.Mesh(new THREE.BoxGeometry(width, height, thick), wallMat);
+        backWall.position.set(0, height / 2, -halfD);
+        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(thick, height, depth), wallMat);
+        leftWall.position.set(-halfW, height / 2, 0);
+        const rightWall = leftWall.clone();
+        rightWall.position.x = halfW;
+
+        const frontLeft = new THREE.Mesh(new THREE.BoxGeometry((width - doorGap) / 2, height, thick), wallMat);
+        frontLeft.position.set(-(doorGap / 2 + (width - doorGap) / 4), height / 2, halfD);
+        const frontRight = frontLeft.clone();
+        frontRight.position.x = (doorGap / 2 + (width - doorGap) / 4);
+
+        [backWall, leftWall, rightWall, frontLeft, frontRight].forEach(w => {
+            w.castShadow = true;
+            w.receiveShadow = true;
+            g.add(w);
+        });
+
+        // Floor 1
+        const floor1 = new THREE.Mesh(new THREE.BoxGeometry(width - 0.4, 0.3, depth - 0.4), floorMat);
+        floor1.position.y = 0.15;
+        floor1.receiveShadow = true;
+        g.add(floor1);
+
+        // Floor 2
+        const floor2 = new THREE.Mesh(new THREE.BoxGeometry(width - 0.4, 0.3, depth - 0.4), floorMat);
+        floor2.position.y = 3.4;
+        floor2.receiveShadow = true;
+        g.add(floor2);
+
+        // Ramp (external gentle slope to floor 2)
+        const rampHeight = floor2.position.y;
+        const rampLength = 7;
+        const rampGeo = new THREE.BoxGeometry(2.4, rampHeight, rampLength);
+        const ramp = new THREE.Mesh(rampGeo, floorMat);
+        ramp.position.set(-halfW - 1.4, rampHeight / 2, 0);
+        ramp.rotation.z = 0;
+        ramp.rotation.x = -Math.atan(rampHeight / rampLength);
+        ramp.castShadow = true;
+        ramp.receiveShadow = true;
+        g.add(ramp);
+
+        // Railings for flavor
+        const railMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
+        const railGeo = new THREE.BoxGeometry(0.1, rampHeight, rampLength);
+        const railL = new THREE.Mesh(railGeo, railMat);
+        railL.position.set(ramp.position.x - 1.1, rampHeight / 2, 0);
+        railL.rotation.x = ramp.rotation.x;
+        const railR = railL.clone();
+        railR.position.x = ramp.position.x + 1.1;
+        g.add(railL, railR);
+
+        // Roof trim
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(width + 0.4, 0.4, depth + 0.4), new THREE.MeshStandardMaterial({ color: 0x95a5a6 }));
+        roof.position.y = height + 0.2;
+        roof.castShadow = true;
+        g.add(roof);
+
+        return g;
+    }
+
 
     createStormVisuals() {
         const geometry = new THREE.CylinderGeometry(this.stormRadius, this.stormRadius, 50, 32, 1, true);
@@ -481,4 +720,12 @@ export class World {
         return { inStorm: dist > this.stormRadius };
     }
 
+    _buildHeightFn() {
+        // Flat height map to keep navigation stable
+        return () => 0;
+    }
+
+    getHeightAt(x, z) {
+        return this._heightFn ? this._heightFn(x, z) : 0;
+    }
 }

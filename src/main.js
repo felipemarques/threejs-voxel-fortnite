@@ -231,6 +231,10 @@ class Game {
         
         // 4. Update Player with World Objects
         this.player.worldObjects = this.world.objects;
+        this.player.world = this.world;
+        if (this.itemManager && typeof this.itemManager.setWorld === 'function') {
+            this.itemManager.setWorld(this.world);
+        }
 
         this.hud = new HUD(this.player, this.world, settings);
         this.enemyManager = new EnemyManager(this.scene, this.player, this.world, settings);

@@ -43,11 +43,13 @@ export class EnemyManager {
         const spawnSpan = (this.world && this.world.halfMapSize) ? this.world.halfMapSize : 100;
         const x = (Math.random() - 0.5) * spawnSpan;
         const z = (Math.random() - 0.5) * spawnSpan;
+        const groundY = (this.world && typeof this.world.getHeightAt === 'function') ? this.world.getHeightAt(x, z) : 0;
         
         const mapHalfSize = (this.world && this.world.halfMapSize) ? this.world.halfMapSize : 100;
-        const enemy = new Bot(this.scene, x, 0, z, this.difficulty, mapHalfSize);
+        const enemy = new Bot(this.scene, x, groundY, z, this.difficulty, mapHalfSize);
         enemy.audioCtx = this.audioCtx; // Pass audio context to bot
         enemy.deathBuffer = this.deathBuffer; // Pass death buffer
+        enemy.world = this.world;
         this.enemies.push(enemy);
     }
 
@@ -79,6 +81,7 @@ class Bot {
         this.scene = scene;
         this.position = new THREE.Vector3(x, y, z);
         this.mapHalfSize = mapHalfSize;
+        this.world = null;
         
         // Stats based on difficulty
         if (difficulty === 'easy') {
@@ -297,6 +300,12 @@ class Bot {
 
         // Update Mesh
         this.mesh.position.copy(this.position);
+        // Terrain adherence
+        if (this.world && typeof this.world.getHeightAt === 'function') {
+            const groundY = this.world.getHeightAt(this.position.x, this.position.z);
+            this.mesh.position.y = Math.max(this.mesh.position.y, groundY);
+            this.position.y = this.mesh.position.y;
+        }
         
         // Animation
         if (isMoving) {
