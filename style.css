@@ -683,8 +683,3 @@ html {
 .debug-error {
     color: #ff9b9b;
 }
-
-/* Pause Menu - ensure high z-index */
-#pause-menu {
-    z-index: 300 !important;
-}

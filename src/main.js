@@ -158,12 +158,24 @@ class Game {
                 // Game already exists, just resume
                 this.isPaused = false;
                 this.clock.getDelta(); // Reset clock to prevent delta accumulation
+                
+                // Reset button text
+                playBtn.innerText = 'PLAY GAME';
+                
+                // Lock pointer again
+                if (this.player.controls) {
+                    try {
+                        this.player.controls.lock();
+                    } catch (e) {}
+                }
+                
                 // Apply updated settings to HUD if present
                 if (this.hud) {
                     this.hud.settings = settings;
                 }
             } else {
                 // Start new game
+                playBtn.innerText = 'PLAY GAME';
                 this.startGame(settings);
             }
         };
@@ -256,46 +268,61 @@ class Game {
     togglePause() {
         if (!this.player) return; // Don't pause if game hasn't started
         
-        // If pointer lock is active, unlock it and open pause menu
+        // If pointer lock is active, show pause menu
         if (this.player.controls && this.player.controls.isLocked) {
-            this.isPaused = true;
-            this.player.controls.unlock();
-            if (this.pauseMenu) this.pauseMenu.classList.remove('hidden');
-            // Pause background music when showing pause menu
-            this.pauseBackgroundMusic();
+            this.showPauseMenu();
             return;
         }
         
-        // Otherwise, toggle pause normally
+        // Otherwise, toggle pause normally (shouldn't happen often now)
         this.isPaused = !this.isPaused;
+        
         if (this.isPaused) {
-            if (this.pauseMenu) this.pauseMenu.classList.remove('hidden');
-            if (this.player.controls) this.player.controls.unlock();
-            // Pause background music
             this.pauseBackgroundMusic();
         } else {
-            if (this.pauseMenu) this.pauseMenu.classList.add('hidden');
-            // Reset clock to prevent delta time accumulation
-            this.clock.getDelta();
-            // Resume background music when unpausing
             this.playBackgroundMusic();
         }
     }
 
     setupPauseMenu() {
-        const resumeBtn = document.getElementById('resume-btn');
-        const settingsBtn = document.getElementById('settings-btn');
-        const quitBtn = document.getElementById('quit-btn');
+        // ESC key now shows main menu directly (reusing the same responsive UI)
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Escape' && this.player && !this.player.isDead) {
+                e.preventDefault();
+                this.showPauseMenu();
+            }
+        });
         
-        if (resumeBtn) resumeBtn.onclick = () => this.togglePause();
-        if (settingsBtn) settingsBtn.onclick = () => {
-            // Hide pause menu and show main menu (keep game paused)
-            if (this.pauseMenu) this.pauseMenu.classList.add('hidden');
-            const menu = document.getElementById('main-menu');
-            if (menu) menu.style.display = 'block';
-            // Keep isPaused = true so game stays frozen
-        };
-        if (quitBtn) quitBtn.onclick = () => location.reload();
+        // Old pause menu buttons (if they exist, remove them from DOM)
+        const oldPauseMenu = document.getElementById('pause-menu');
+        if (oldPauseMenu) {
+            oldPauseMenu.remove();
+        }
+    }
+    
+    showPauseMenu() {
+        // Pause game
+        this.isPaused = true;
+        
+        // Unlock pointer
+        if (this.player.controls && this.player.controls.isLocked) {
+            this.player.controls.unlock();
+        }
+        
+        // Pause background music
+        this.pauseBackgroundMusic();
+        
+        // Show main menu (reuse the same UI)
+        const menu = document.getElementById('main-menu');
+        if (menu) {
+            menu.style.display = 'flex';
+            
+            // Update button text to show "Resume" instead of "Play Game"
+            const playBtn = document.getElementById('play-btn');
+            if (playBtn && this.player) {
+                playBtn.innerText = 'RESUME GAME';
+            }
+        }
     }
 
     // Background music control
