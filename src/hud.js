@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import defeatSfx from './assets/mixkit-player-losing-or-failing.mp3';
 import victorySfx from './assets/game-level-completed-envato-mixkit.co.mp3';
 export class HUD {
-    constructor(player, settings) {
+    constructor(player, world, settings) {
         this.player = player;
+        this.world = world;
         this.settings = settings || {};
         
         // Elements
@@ -52,6 +53,11 @@ export class HUD {
         this.currentOutlinedEnemy = null;
         this.hoverInfo = document.getElementById('hover-info');
         this.targetDistanceEl = document.getElementById('target-distance');
+        this.minimapContainer = document.getElementById('minimap');
+        this.minimapCanvas = document.getElementById('minimap-canvas');
+        this.minimapCtx = this.minimapCanvas ? this.minimapCanvas.getContext('2d') : null;
+        this.minimapSize = this.minimapCanvas ? this.minimapCanvas.width : 180;
+        this.mapSize = (world && world.mapSize) ? world.mapSize : 200;
 
         // Mouse move listener for hover detection
         window.addEventListener('mousemove', (e) => {
@@ -306,6 +312,9 @@ export class HUD {
             }
         }
 
+        // Minimap
+        this.updateMinimap();
+
         // Hotbar
         // Clear existing slots
         this.slots.forEach(s => s.style.display = 'none');
@@ -404,5 +413,50 @@ export class HUD {
             }
         } catch (e) { }
     }
-}
 
+    updateMinimap() {
+        if (!this.minimapContainer) return;
+
+        const enabled = this.settings.showMinimap !== false;
+        this.minimapContainer.classList.toggle('hidden', !enabled);
+        if (!enabled || !this.minimapCtx || !this.player) return;
+
+        const ctx = this.minimapCtx;
+        const size = this.minimapSize;
+        ctx.clearRect(0, 0, size, size);
+
+        // Background and border
+        ctx.fillStyle = 'rgba(10, 12, 20, 0.75)';
+        ctx.fillRect(0, 0, size, size);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, size - 2, size - 2);
+
+        const half = Math.max(1, (this.world && this.world.halfMapSize) ? this.world.halfMapSize : (this.mapSize / 2));
+        const radius = size * 0.45;
+        const cx = size / 2;
+        const cz = size / 2;
+
+        // Storm ring
+        if (this.world && typeof this.world.stormRadius === 'number' && this.world.stormRadius > 0) {
+            const stormScale = Math.max(0, Math.min(1.2, this.world.stormRadius / half));
+            const stormR = radius * stormScale;
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(157, 77, 187, 0.85)';
+            ctx.lineWidth = 3;
+            ctx.arc(cx, cz, stormR, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // Player dot
+        const px = Math.max(cx - radius, Math.min(cx + radius, cx + (this.player.position.x / half) * radius));
+        const pz = Math.max(cz - radius, Math.min(cz + radius, cz - (this.player.position.z / half) * radius));
+        ctx.beginPath();
+        ctx.fillStyle = '#00d8ff';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.arc(px, pz, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+    }
+}

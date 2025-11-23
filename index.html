@@ -17,6 +17,11 @@
 
         <!-- Storm Timer -->
         <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>
+        <!-- Minimap -->
+        <div id="minimap" aria-label="Minimap">
+            <canvas id="minimap-canvas" width="180" height="180"></canvas>
+            <div id="minimap-label">MAP</div>
+        </div>
 
         <!-- Camera Mode Hint -->
         <div id="camera-hint" style="position: absolute; top: 60px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 12px; font-family: Arial;">Press V to toggle camera</div>
@@ -134,6 +139,10 @@
                     <div style="display:flex; align-items:center; gap:8px;">
                         <input type="checkbox" id="setting-show-target-distance" style="width: 20px; height: 20px;">
                         <label for="setting-show-target-distance" style="margin: 0; color:white;">Show Target Distance (Top-Left)</label>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-minimap" style="width: 20px; height: 20px;" checked>
+                        <label for="setting-minimap" style="margin: 0; color:white;">Show Minimap</label>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
                         <input type="checkbox" id="setting-touch-controls" style="width:20px; height:20px;">

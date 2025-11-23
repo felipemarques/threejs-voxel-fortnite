@@ -93,6 +93,7 @@ class Game {
         const debugCheckbox = document.getElementById('setting-debug');
         const showIdsCheckbox = document.getElementById('setting-show-ids');
         const showTargetDistCheckbox = document.getElementById('setting-show-target-distance');
+        const minimapCheckbox = document.getElementById('setting-minimap');
         const volumeSlider = document.getElementById('setting-music-volume');
         const volumeVal = document.getElementById('setting-music-volume-val');
         const cameraSelect = document.getElementById('setting-camera');
@@ -113,6 +114,7 @@ class Game {
             if (s.debugMode) debugCheckbox.checked = true;
             if (s.showRenderedIds && showIdsCheckbox) showIdsCheckbox.checked = true;
             if (s.showTargetDistance && showTargetDistCheckbox) showTargetDistCheckbox.checked = true;
+            if (minimapCheckbox) minimapCheckbox.checked = s.showMinimap !== false;
             if (s.musicVolume !== undefined && volumeSlider && volumeVal) {
                 const v = parseInt(s.musicVolume, 10);
                 volumeSlider.value = v;
@@ -135,6 +137,7 @@ class Game {
                 debugMode: debugCheckbox.checked,
                 showRenderedIds: showIdsCheckbox ? showIdsCheckbox.checked : false,
                 showTargetDistance: showTargetDistCheckbox ? showTargetDistCheckbox.checked : false,
+                showMinimap: minimapCheckbox ? minimapCheckbox.checked : true,
                 musicVolume: volumeSlider ? parseInt(volumeSlider.value) : Math.round(this.bgMusicVolume * 100),
                 musicEnabled: document.getElementById('setting-music-enabled') ? document.getElementById('setting-music-enabled').checked : true,
                 cameraMode: cameraSelect.value,
@@ -229,7 +232,7 @@ class Game {
         // 4. Update Player with World Objects
         this.player.worldObjects = this.world.objects;
 
-        this.hud = new HUD(this.player, settings);
+        this.hud = new HUD(this.player, this.world, settings);
         this.enemyManager = new EnemyManager(this.scene, this.player, this.world, settings);
         
         // Give player reference to enemies for shooting
