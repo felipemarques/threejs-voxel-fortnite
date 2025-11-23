@@ -376,18 +376,33 @@ class Bot {
             
             // Play death sound
             try {
-                if (this.audioCtx && this.deathBuffer && this.audioCtx.state === 'running') {
-                    const src = this.audioCtx.createBufferSource();
-                    src.buffer = this.deathBuffer;
-                    const gain = this.audioCtx.createGain();
-                    gain.gain.value = 0.5; // Volume
-                    src.connect(gain);
-                    gain.connect(this.audioCtx.destination);
-                    src.start(0);
-                } else if (this.audioCtx && this.audioCtx.state === 'suspended') {
-                    this.audioCtx.resume();
+                if (this.audioCtx && this.deathBuffer) {
+                    // Resume AudioContext if suspended (mobile requirement)
+                    if (this.audioCtx.state === 'suspended') {
+                        this.audioCtx.resume().then(() => {
+                            this.playDeathSound();
+                        });
+                    } else if (this.audioCtx.state === 'running') {
+                        this.playDeathSound();
+                    }
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.warn('Error playing death sound:', e);
+            }
+        }
+    }
+    
+    playDeathSound() {
+        try {
+            const src = this.audioCtx.createBufferSource();
+            src.buffer = this.deathBuffer;
+            const gain = this.audioCtx.createGain();
+            gain.gain.value = 0.7; // Volume (increased from 0.5)
+            src.connect(gain);
+            gain.connect(this.audioCtx.destination);
+            src.start(0);
+        } catch (e) {
+            console.warn('playDeathSound error:', e);
         }
     }
 

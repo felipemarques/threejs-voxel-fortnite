@@ -38,10 +38,16 @@ export class TouchControls {
         this.interactBtn.className = 'tc-btn tc-interact-btn';
         this.interactBtn.innerText = 'E';
         this.interactBtn.style.display = 'none'; // Hidden by default
+        
+        this.crouchBtn = document.createElement('button');
+        this.crouchBtn.className = 'tc-btn';
+        this.crouchBtn.innerText = 'CROUCH';
+        this.crouchBtn.style.fontSize = '16px';
 
         this.buttons.appendChild(this.fireBtn);
         this.buttons.appendChild(this.jumpBtn);
         this.buttons.appendChild(this.sprintBtn);
+        this.buttons.appendChild(this.crouchBtn);
         this.buttons.appendChild(this.interactBtn);
 
         // Add to container
@@ -193,6 +199,17 @@ export class TouchControls {
             // Trigger interaction with items
             if (window.game && window.game.itemManager) {
                 window.game.itemManager.tryInteract();
+            }
+        });
+        
+        // Crouch button (toggle)
+        this.crouchBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (this.player) {
+                this.player.isCrouching = !this.player.isCrouching;
+                // Update button appearance
+                this.crouchBtn.style.background = this.player.isCrouching ? 
+                    'rgba(52, 152, 219, 0.9)' : 'rgba(241, 196, 15, 0.9)';
             }
         });
     }

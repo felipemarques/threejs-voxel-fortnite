@@ -447,12 +447,14 @@ Game.prototype.playEndSequence = function(sfxPath, options = {}) {
         }
         this._playingEndSequence = true;
         
-        // Lower background music to 20% of configured volume
+        // Stop background music completely during end sequence
         if (this.bgAudio) {
             try {
                 this._prevBgVolume = this.bgAudio.volume;
-            } catch (e) { this._prevBgVolume = this.bgMusicVolume; }
-            try { this.bgAudio.volume = (this.bgMusicVolume || 0.5) * 0.2; } catch (e) {}
+                this.bgAudio.pause(); // Stop completely instead of lowering volume
+            } catch (e) { 
+                this._prevBgVolume = this.bgMusicVolume; 
+            }
         }
 
         // Stop any previous end-sequence audio

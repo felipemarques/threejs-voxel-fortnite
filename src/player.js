@@ -96,10 +96,17 @@ export class Player {
         // Sound effects (Web Audio API to avoid WebMediaPlayer limits)
         this.sfxVolume = 0.7;
         this.gunshotBuffer = null;
+        this.reloadBuffer = null;
+        
+        // Crouch state
+        this.isCrouching = false;
+        this.crouchHeight = 0.8; // Height multiplier when crouching
+        
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (AudioContext) {
                 this.audioCtx = new AudioContext();
+                
                 // Load gunshot buffer
                 fetch(gunshotSfx)
                     .then(response => response.arrayBuffer())
@@ -108,6 +115,16 @@ export class Player {
                         this.gunshotBuffer = audioBuffer;
                     })
                     .catch(e => console.warn('Error loading gunshot SFX:', e));
+                
+                // Load reload buffer
+                import('./assets/mixkit-shotgun-recharge.mp3')
+                    .then(module => fetch(module.default))
+                    .then(response => response.arrayBuffer())
+                    .then(arrayBuffer => this.audioCtx.decodeAudioData(arrayBuffer))
+                    .then(audioBuffer => {
+                        this.reloadBuffer = audioBuffer;
+                    })
+                    .catch(e => console.warn('Error loading reload SFX:', e));
             }
         } catch (e) {
             console.warn('Web Audio API not supported:', e);
@@ -334,6 +351,10 @@ export class Player {
                 case 'Digit3': this.switchWeapon(2); break;
                 case 'Digit4': this.switchWeapon(3); break;
                 case 'KeyR': this.reload(); break;
+                case 'KeyC': 
+                    // Toggle crouch
+                    this.isCrouching = !this.isCrouching;
+                    break;
                 case 'ShiftLeft':
                 case 'ShiftRight':
                     // start sprint input
@@ -439,10 +460,34 @@ export class Player {
         this.isReloading = true;
         console.log("Reloading...");
         
+        // Play reload sound
+        this.playReloadSound();
+        
         // Simple timeout for reload
         setTimeout(() => {
             this.finishReload();
         }, weapon.reloadTime * 1000);
+    }
+    
+    playReloadSound() {
+        try {
+            if (this.audioCtx && this.reloadBuffer) {
+                // Resume if suspended
+                if (this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
+                
+                const src = this.audioCtx.createBufferSource();
+                src.buffer = this.reloadBuffer;
+                const gain = this.audioCtx.createGain();
+                gain.gain.value = this.sfxVolume * 0.8;
+                src.connect(gain);
+                gain.connect(this.audioCtx.destination);
+                src.start(0);
+            }
+        } catch (e) {
+            console.warn('Error playing reload sound:', e);
+        }
     }
 
     finishReload() {
@@ -781,7 +826,14 @@ export class Player {
 
             // Camera Follow
             this.camera.position.copy(this.mesh.position);
-            this.camera.position.y += 1.6; // Eye height
+            
+            // Adjust camera height based on crouch state
+            const eyeHeight = this.isCrouching ? 1.6 * this.crouchHeight : 1.6;
+            this.camera.position.y += eyeHeight;
+            
+            // Apply crouch visual effect to player mesh
+            const targetScaleY = this.isCrouching ? this.crouchHeight : 1.0;
+            this.mesh.scale.y += (targetScaleY - this.mesh.scale.y) * 10 * dt; // Smooth transition
 
             // Zoom Logic
             let targetFov = this.baseFov;
