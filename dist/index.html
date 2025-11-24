@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voxel Firecraft Prototype</title>
     <link rel="icon" type="image/png" href="/threejs-voxel-firecraft/dist/assets/favicon-BAg40dZS.png">
-  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/index-CklyWG_j.js"></script>
-  <link rel="stylesheet" crossorigin href="/threejs-voxel-firecraft/dist/assets/index-BFEJ4BYc.css">
+  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/index-DYWgfcS3.js"></script>
+  <link rel="stylesheet" crossorigin href="/threejs-voxel-firecraft/dist/assets/index-BVUrVkjF.css">
 </head>
 <body>
     <div id="game-container"></div>
@@ -19,6 +19,8 @@
         <button id="float-btn" class="hidden">FLOAT</button>
         <!-- Hover info above crosshair -->
         <div id="hover-info" style="position:absolute; top:48%; left:50%; transform:translate(-50%, -100%); color:#fff; pointer-events:none; font-family:Arial; font-size:14px; text-shadow:0 0 6px rgba(0,0,0,0.8);"></div>
+        <!-- Click selection info -->
+        <div id="selection-info" class="hidden" aria-live="polite"></div>
 
         <!-- Storm Timer -->
         <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>
@@ -41,6 +43,7 @@
         <div>Killed: <span id="kill-count">0</span></div>
         <div>Distance: <span id="distance-traveled">0.00</span> km</div>
         <div>Memory: <span id="memory-usage">0</span> MB</div>
+        <div id="target-inspect">Target: ---</div>
         <div id="debug-info" style="display: none; color: #f1c40f; margin-top: 10px; border-top: 1px solid #555; padding-top: 5px;">
             <div>Target: <span id="debug-target-name">None</span></div>
             <div>ID: <span id="debug-target-id">---</span></div>
