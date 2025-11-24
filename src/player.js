@@ -13,6 +13,8 @@ export class Player {
         this.worldObjects = worldObjects;
         this.world = null;
         this.gameMode = settings.gameMode || 'survival';
+        // Optional visual tracers; off by default to avoid extra draw calls
+        this.showTracers = settings.showTracers === true;
         this.backpack = null;
         this.backpackColor = null;
         this.placedBlocks = [];
@@ -811,8 +813,10 @@ export class Player {
             }
         }
         
-        // Create bullet tracer visualization
-        this.createBulletTracer(bulletStart, bulletEnd, hitSomething);
+        // Create bullet tracer visualization (optional; off by default for perf)
+        if (this.showTracers) {
+            this.createBulletTracer(bulletStart, bulletEnd, hitSomething);
+        }
 
         // Impact smoke for sniper hits
         if (hitSomething && weapon.name === 'Sniper') {

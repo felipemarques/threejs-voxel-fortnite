@@ -48,7 +48,7 @@ export class EnemyManager {
         const groundY = (this.world && typeof this.world.getHeightAt === 'function') ? this.world.getHeightAt(x, z) : 0;
         
         const mapHalfSize = (this.world && this.world.halfMapSize) ? this.world.halfMapSize : 100;
-        const enemy = new Bot(this.scene, x, groundY, z, this.difficulty, mapHalfSize);
+        const enemy = new Bot(this.scene, x, groundY, z, this.difficulty, mapHalfSize, this.player);
         enemy.audioCtx = this.audioCtx; // Pass audio context to bot
         enemy.deathBuffer = this.deathBuffer; // Pass death buffer
         enemy.world = this.world;
@@ -75,7 +75,7 @@ export class EnemyManager {
         
         // Remove dead enemies
         this.enemies = this.enemies.filter(enemy => {
-            if (enemy.isDead) {
+            if (enemy.readyToDespawn) {
                 this.killedCount++;
                 return false;
             }
@@ -86,11 +86,16 @@ export class EnemyManager {
 
 
 class Bot {
-    constructor(scene, x, y, z, difficulty, mapHalfSize = 100) {
+    constructor(scene, x, y, z, difficulty, mapHalfSize = 100, player = null) {
         this.scene = scene;
         this.position = new THREE.Vector3(x, y, z);
         this.mapHalfSize = mapHalfSize;
         this.world = null;
+        this.player = player;
+        this.deathTimer = 0;
+        this.deathDuration = 0;
+        this.deathFallProgress = 0;
+        this.readyToDespawn = false;
         
         // Stats based on difficulty
         if (difficulty === 'easy') {
@@ -194,7 +199,10 @@ class Bot {
     }
 
     update(dt, player) {
-        if (this.isDead) return;
+        if (this.isDead) {
+            this.updateDeath(dt);
+            return;
+        }
 
         const playerPos = player.position;
 
@@ -399,25 +407,8 @@ class Bot {
             }
         }, 100);
 
-        if (this.health <= 0) {
-            this.isDead = true;
-            this.scene.remove(this.mesh);
-            
-            // Play death sound
-            try {
-                if (this.audioCtx && this.deathBuffer) {
-                    // Resume AudioContext if suspended (mobile requirement)
-                    if (this.audioCtx.state === 'suspended') {
-                        this.audioCtx.resume().then(() => {
-                            this.playDeathSound();
-                        });
-                    } else if (this.audioCtx.state === 'running') {
-                        this.playDeathSound();
-                    }
-                }
-            } catch (e) {
-                console.warn('Error playing death sound:', e);
-            }
+        if (this.health <= 0 && !this.isDead) {
+            this.startDeath();
         }
     }
     
@@ -501,8 +492,54 @@ class Bot {
         return true; // Clear line of sight
     }
 
-    die() {
+    startDeath() {
         this.isDead = true;
-        this.scene.remove(this.mesh);
+        this.deathTimer = 0;
+        this.deathFallProgress = 0;
+        this.deathDuration = 3 + Math.random() * 2; // 3–5 seconds before despawn
+
+        // Hide health bar during death
+        if (this.healthBarBg) this.healthBarBg.visible = false;
+        if (this.healthBarFg) this.healthBarFg.visible = false;
+
+        // Play death sound only if player is nearby
+        const hearRadius = 25;
+        const playerPos = this.player && this.player.position;
+        const canHear = playerPos ? this.position.distanceTo(playerPos) <= hearRadius : true;
+        if (canHear) {
+            try {
+                if (this.audioCtx && this.deathBuffer) {
+                    // Resume AudioContext if suspended (mobile requirement)
+                    if (this.audioCtx.state === 'suspended') {
+                        this.audioCtx.resume().then(() => {
+                            this.playDeathSound();
+                        });
+                    } else if (this.audioCtx.state === 'running') {
+                        this.playDeathSound();
+                    }
+                }
+            } catch (e) {
+                console.warn('Error playing death sound:', e);
+            }
+        }
+    }
+
+    updateDeath(dt) {
+        // Smoothly tilt forward and sink a bit
+        this.deathFallProgress = Math.min(1, this.deathFallProgress + dt * 2.5);
+        const tilt = -Math.PI / 2 * this.deathFallProgress;
+        if (this.mesh) {
+            this.mesh.rotation.x = tilt;
+            // Drop slightly so it rests on the ground
+            this.mesh.position.y = Math.max(0, this.mesh.position.y - dt * 0.6);
+        }
+
+        this.deathTimer += dt;
+        if (this.deathTimer >= (this.deathDuration || 3)) {
+            if (this.mesh && this.mesh.parent) {
+                this.scene.remove(this.mesh);
+            }
+            this.readyToDespawn = true;
+        }
     }
 }

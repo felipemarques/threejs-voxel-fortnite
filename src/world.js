@@ -50,9 +50,20 @@ export class World {
             return Math.max(-limit, Math.min(limit, v));
         };
         const groundY = (x, z) => (this.getHeightAt ? this.getHeightAt(x, z) : 0);
+        // Trimmed density keeps arcade/survival performant without gutting cover variety
+        const density = {
+            trees: 70,
+            rocks: 50,
+            bushes: 50,
+            grass: 180,
+            houses: 12,
+            vehicles: 12,
+            plateaus: 4,
+            smallBuildings: 5
+        };
         
         // Ground
-        const groundGeo = new THREE.PlaneGeometry(this.mapSize, this.mapSize, 128, 128);
+        const groundGeo = new THREE.PlaneGeometry(this.mapSize, this.mapSize, 64, 64);
         // Flat ground (no height displacement to avoid navigation issues)
         const pos = groundGeo.attributes.position;
         for (let i = 0; i < pos.count; i++) {
@@ -90,7 +101,7 @@ export class World {
         this.objects.push(ground);
 
         // Trees
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < density.trees; i++) {
             const x = safeCoord(0.9);
             const z = safeCoord(0.9);
             const y = groundY(x, z);
@@ -112,7 +123,7 @@ export class World {
             (x, z, y) => this.createStackedRock(x, z, y),
             (x, z, y) => this.createBasaltCluster(x, z, y)
         ];
-        for (let i = 0; i < 90; i++) {
+        for (let i = 0; i < density.rocks; i++) {
             const x = safeCoord(0.9);
             const z = safeCoord(0.9);
             const y = groundY(x, z);
@@ -123,7 +134,7 @@ export class World {
             this.objects.push(rock);
         }
         // Small bushes
-        for (let i = 0; i < 80; i++) {
+        for (let i = 0; i < density.bushes; i++) {
             const x = safeCoord(0.85);
             const z = safeCoord(0.85);
             const y = groundY(x, z);
@@ -135,7 +146,7 @@ export class World {
         }
 
         // Scattered grass clumps across the map for texture
-        for (let i = 0; i < 400; i++) {
+        for (let i = 0; i < density.grass; i++) {
             const x = safeCoord(0.95);
             const z = safeCoord(0.95);
             const y = groundY(x, z);
@@ -145,7 +156,7 @@ export class World {
         }
         
         // Buildings
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < density.houses; i++) {
             const x = safeCoord(0.75);
             const z = safeCoord(0.75);
             const y = groundY(x, z);
@@ -160,7 +171,7 @@ export class World {
         }
         
         // Vehicles (Cars and Trucks)
-        for (let i = 0; i < 24; i++) {
+        for (let i = 0; i < density.vehicles; i++) {
             const x = safeCoord(0.8);
             const z = safeCoord(0.8);
             const y = groundY(x, z);
@@ -173,7 +184,7 @@ export class World {
         }    
 
         // Elevated natural plateaus with gentle ramps
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < density.plateaus; i++) {
             const x = safeCoord(0.6);
             const z = safeCoord(0.6);
             const height = 6 + Math.random() * 6;
@@ -186,7 +197,7 @@ export class World {
         }
 
         // Small 2‑story buildings with ramps
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < density.smallBuildings; i++) {
             const x = safeCoord(0.7);
             const z = safeCoord(0.7);
             const y = groundY(x, z);
@@ -378,8 +389,8 @@ export class World {
                 mesh.position.y = trunk.position.y + 0.8 + Math.random() * 1.6;
                 mesh.position.x = (Math.random() - 0.5) * 1.5;
                 mesh.position.z = (Math.random() - 0.5) * 1.5;
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
+                mesh.castShadow = false;
+                mesh.receiveShadow = false;
                 treeGroup.add(mesh);
             }
         } else { // Pine
@@ -392,14 +403,16 @@ export class World {
                 mesh.position.y = trunk.position.y + 0.6 + i * 0.9;
                 mesh.position.x = (Math.random() - 0.5) * 0.2;
                 mesh.position.z = (Math.random() - 0.5) * 0.2;
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
+                mesh.castShadow = false;
+                mesh.receiveShadow = false;
                 treeGroup.add(mesh);
             }
             // add a small topper
             const topGeo = new THREE.SphereGeometry(0.25, 6, 6);
             const top = new THREE.Mesh(topGeo, leavesMat);
             top.position.y = trunk.position.y + coneCount * 0.9 + 0.3;
+            top.castShadow = false;
+            top.receiveShadow = false;
             treeGroup.add(top);
         }
 
@@ -412,7 +425,7 @@ export class World {
             grass.position.y = 0.01;
             grass.position.x = (Math.random() - 0.5) * 0.5;
             grass.position.z = (Math.random() - 0.5) * 0.5;
-            grass.receiveShadow = true;
+            grass.receiveShadow = false;
             treeGroup.add(grass);
         }
 

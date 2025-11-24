@@ -40,8 +40,12 @@ class Game {
         this.scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        // Cap pixel ratio to avoid ultra-high-res rendering on dense displays
+        const maxPixelRatio = IS_MOBILE ? 1.0 : 1.5;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.BasicShadowMap;
         document.getElementById('game-container').appendChild(this.renderer.domElement);
 
         // Lighting
@@ -56,9 +60,9 @@ class Game {
         dirLight.shadow.camera.top = 100;
         dirLight.shadow.camera.bottom = -100;
         dirLight.shadow.camera.near = 0.1;
-        dirLight.shadow.camera.far = 200;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.far = 160;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
         this.scene.add(dirLight);
 
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
