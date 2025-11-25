@@ -185,7 +185,12 @@ export class World {
             const type = Math.random() > 0.6 ? 'truck' : 'car';
             const vehicle = this.createVehicle(x, z, type);
             vehicle.position.y = y;
-            vehicle.userData = { gameId: this.generateID(), gameName: `Vehicle_${type}`, type: 'vehicle' };
+            vehicle.userData = {
+                ...(vehicle.userData || {}),
+                gameId: this.generateID(),
+                gameName: `Vehicle_${type}`,
+                type: 'vehicle'
+            };
             this.scene.add(vehicle);
             this.objects.push(vehicle);
         }    
@@ -551,9 +556,9 @@ export class World {
         const col = new THREE.MeshStandardMaterial({ color: 0x2ca02c, roughness: 1 });
         const parts = 2 + Math.floor(Math.random() * 3);
         for (let i = 0; i < parts; i++) {
-            const r = 0.6 + Math.random() * 0.6;
+            const r = 1.2 + Math.random() * 1.0; // bigger bushes to hide inside
             const g = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 6), col);
-            g.position.set((Math.random() - 0.5) * 0.5, r * 0.6, (Math.random() - 0.5) * 0.5);
+            g.position.set((Math.random() - 0.5) * 1.2, r * 0.65, (Math.random() - 0.5) * 1.2);
             g.castShadow = true;
             bushGroup.add(g);
         }
@@ -564,6 +569,14 @@ export class World {
         const vehicleGroup = new THREE.Group();
         vehicleGroup.position.set(x, 0, z);
         vehicleGroup.rotation.y = Math.random() * Math.PI * 2; // Random rotation
+        const wheelRadius = type === 'truck' ? 0.45 : 0.35;
+        const wheelCenterY = type === 'truck' ? 0.4 : 0.3;
+        vehicleGroup.userData = {
+            vehicleType: type,
+            wheelRadius,
+            wheelCenterY,
+            groundClearance: wheelRadius - wheelCenterY
+        };
         
         if (type === 'car') {
             // Car body

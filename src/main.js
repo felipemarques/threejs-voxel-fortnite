@@ -111,7 +111,6 @@ class Game {
         const mapSizeInput = document.getElementById('setting-map-size');
         const mapSizeVal = document.getElementById('map-size-val');
         const debugCheckbox = document.getElementById('setting-debug');
-        const showIdsCheckbox = document.getElementById('setting-show-ids');
         const minimapCheckbox = document.getElementById('setting-minimap');
         const volumeSlider = document.getElementById('setting-music-volume');
         const volumeVal = document.getElementById('setting-music-volume-val');
@@ -123,6 +122,14 @@ class Game {
         
         const enemiesVal = document.getElementById('enemy-count-val');
         const stormVal = document.getElementById('storm-time-val');
+
+        const bindRangeLabel = (inputEl, labelEl) => {
+            if (!inputEl || !labelEl) return;
+            const update = () => { labelEl.innerText = inputEl.value; };
+            inputEl.addEventListener('input', update);
+            inputEl.addEventListener('change', update);
+            update();
+        };
 
         // Load Settings
         const savedSettings = localStorage.getItem('voxel-firecraft-settings');
@@ -139,7 +146,6 @@ class Game {
                 mapSizeVal.innerText = ms;
             }
             if (s.debugMode) debugCheckbox.checked = true;
-            if (s.showRenderedIds && showIdsCheckbox) showIdsCheckbox.checked = true;
             if (minimapCheckbox) minimapCheckbox.checked = s.showMinimap !== false;
             if (s.musicVolume !== undefined && volumeSlider && volumeVal) {
                 const v = parseInt(s.musicVolume, 10);
@@ -152,12 +158,10 @@ class Game {
             if (s.gameMode && gameModeSelect) gameModeSelect.value = s.gameMode;
         }
 
-        // Update labels
-        enemiesInput.oninput = () => enemiesVal.innerText = enemiesInput.value;
-        stormInput.oninput = () => stormVal.innerText = stormInput.value;
-        if (mapSizeInput && mapSizeVal) {
-            mapSizeInput.oninput = () => mapSizeVal.innerText = mapSizeInput.value;
-        }
+        // Update labels live
+        bindRangeLabel(enemiesInput, enemiesVal);
+        bindRangeLabel(stormInput, stormVal);
+        bindRangeLabel(mapSizeInput, mapSizeVal);
 
         playBtn.onclick = () => {
             const settings = {
@@ -166,7 +170,6 @@ class Game {
                 stormTime: parseInt(stormInput.value),
                 mapSize: mapSizeInput ? parseInt(mapSizeInput.value) : DEFAULT_MAP_SIZE,
                 debugMode: debugCheckbox.checked,
-                showRenderedIds: showIdsCheckbox ? showIdsCheckbox.checked : false,
                 showMinimap: minimapCheckbox ? minimapCheckbox.checked : true,
                 musicVolume: volumeSlider ? parseInt(volumeSlider.value) : Math.round(this.bgMusicVolume * 100),
                 musicEnabled: document.getElementById('setting-music-enabled') ? document.getElementById('setting-music-enabled').checked : true,
@@ -582,7 +585,7 @@ class Game {
             }
 
             try {
-                this.itemManager.update();
+                this.itemManager.update(cappedDt);
             } catch (err) {
                 console.error('Error in itemManager.update:', err);
             }
@@ -607,6 +610,11 @@ class Game {
                 const noEnemiesMode = this.player && (this.player.gameMode === 'matrix' || this.player.gameMode === 'studio');
                 if (!noEnemiesMode && this.enemyManager.enemies.length === 0 && !this.player.isDead && !this.victoryShown) {
                     this.victoryShown = true; // Prevent multiple calls
+                    try {
+                        if (this.player && typeof this.player.stopFootsteps === 'function') {
+                            this.player.stopFootsteps();
+                        }
+                    } catch (e) {}
                     this.hud.showVictory();
                     this.player.controls.unlock();
                 }

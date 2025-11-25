@@ -40,6 +40,7 @@
         <div>FPS: <span id="fps-counter">0</span></div>
         <div>Enemies: <span id="enemy-count">0</span></div>
         <div>Killed: <span id="kill-count">0</span></div>
+        <div>Drops: <span id="drop-count">0</span></div>
         <div>Distance: <span id="distance-traveled">0.00</span> km</div>
         <div>Memory: <span id="memory-usage">0</span> MB</div>
         <div id="target-inspect">Target: ---</div>
@@ -127,7 +128,7 @@
 
             <div class="menu-group">
                 <label>Enemies: <span id="enemy-count-val">15</span></label>
-                <input type="range" id="setting-enemies" min="5" max="500" value="15">
+                <input type="range" id="setting-enemies" min="5" max="500" step="5" value="15">
             </div>
 
             <div class="menu-group">
@@ -154,10 +155,6 @@
                     <div style="display:flex; align-items:center; gap:8px;">
                         <input type="checkbox" id="setting-debug" style="width: 20px; height: 20px;">
                         <label for="setting-debug" style="margin: 0; color:white;">Debug Mode</label>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" id="setting-show-ids" style="width: 20px; height: 20px;">
-                        <label for="setting-show-ids" style="margin: 0; color:white;">Show Rendered IDs</label>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <input type="checkbox" id="setting-minimap" style="width: 20px; height: 20px;" checked>

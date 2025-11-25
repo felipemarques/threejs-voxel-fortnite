@@ -28,6 +28,7 @@ export class HUD {
         this.fpsCounter = document.getElementById('fps-counter');
         this.enemyCount = document.getElementById('enemy-count');
         this.killCount = document.getElementById('kill-count');
+        this.dropCount = document.getElementById('drop-count');
         this.distanceTraveled = document.getElementById('distance-traveled');
         this.memoryUsage = document.getElementById('memory-usage');
         this.targetInspect = document.getElementById('target-inspect');
@@ -172,6 +173,16 @@ export class HUD {
             this.enemyCount.innerText = this.player.enemyManager.enemies.length;
             this.killCount.innerText = this.player.enemyManager.killedCount || 0;
         }
+        // Drops (total items on map, ignoring opened/consumed)
+        if (this.dropCount) {
+            const im = (typeof window !== 'undefined' && window.game && window.game.itemManager) ? window.game.itemManager : null;
+            if (im && Array.isArray(im.items)) {
+                const total = im.items.filter(it => !(it.userData && it.userData.isOpened)).length;
+                this.dropCount.innerText = total;
+            } else {
+                this.dropCount.innerText = '0';
+            }
+        }
 
         // Distance traveled (convert meters to kilometers)
         const distanceKm = (this.player.distanceTraveled / 1000).toFixed(2);
@@ -198,29 +209,8 @@ export class HUD {
             this.ammoCount.innerText = weapon.ammo === Infinity ? '∞' : `${weapon.currentMag} / ${weapon.ammo}`;
         }
 
-        // Debug per‑object labels (controlled only by showRenderedIds)
-        const showRenderedIds = !!this.settings.showRenderedIds;
-        if (showRenderedIds && this.debugContainer) {
-            // Clear previous labels
-            this.debugContainer.innerHTML = '';
-            const objects = this.player.worldObjects || [];
-            objects.forEach(obj => {
-                if (!obj.userData) return;
-                const pos = obj.position.clone();
-                pos.project(this.player.camera);
-                const x = (pos.x + 1) / 2 * window.innerWidth;
-                const y = (-pos.y + 1) / 2 * window.innerHeight;
-                const div = document.createElement('div');
-                div.className = 'debug-label';
-                div.style.position = 'absolute';
-                div.style.left = `${x}px`;
-                div.style.top = `${y}px`;
-                div.innerText = `${obj.userData.gameName}: ${obj.userData.gameId}`;
-                this.debugContainer.appendChild(div);
-            });
-        } else if (this.debugContainer) {
-            this.debugContainer.innerHTML = '';
-        }
+        // Clear any legacy debug labels container
+        if (this.debugContainer) this.debugContainer.innerHTML = '';
 
         // Update hovered enemy debug info (show ID and distance)
         if (this.debugInfo) {
@@ -531,6 +521,27 @@ export class HUD {
             ctx.lineWidth = 3;
             ctx.arc(cx, cz, stormR, 0, Math.PI * 2);
             ctx.stroke();
+        }
+
+        // Enemy dots (zombies)
+        const enemies = this.player && this.player.enemyManager && Array.isArray(this.player.enemyManager.enemies)
+            ? this.player.enemyManager.enemies
+            : [];
+        if (enemies.length) {
+            ctx.fillStyle = '#ff3b30';
+            ctx.strokeStyle = '#660000';
+            ctx.lineWidth = 1.5;
+            enemies.forEach(enemy => {
+                if (!enemy) return;
+                const pos = enemy.position || (enemy.mesh && enemy.mesh.position);
+                if (!pos) return;
+                const ex = Math.max(cx - radius, Math.min(cx + radius, cx + (pos.x / half) * radius));
+                const ez = Math.max(cz - radius, Math.min(cz + radius, cz - (pos.z / half) * radius));
+                ctx.beginPath();
+                ctx.arc(ex, ez, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
         }
 
         // Player dot

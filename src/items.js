@@ -12,6 +12,10 @@ export class ItemManager {
         this.glowRadius = 7; // Distance to show glow particles
         this.world = null;
         this.settings = settings || {};
+        this.matrixDropInterval = 5; // seconds
+        this._matrixDropTimer = 0;
+        this.matrixDropBatchSize = 10;
+        this.matrixDropRadiusLimit = 10; // meters around player to cap drops
         
         this.initLoot();
         
@@ -120,6 +124,7 @@ export class ItemManager {
         
         this.scene.add(chest);
         this.items.push(chest);
+        return chest;
     }
 
     spawnChestWithLoot(x, z, loot) {
@@ -163,6 +168,7 @@ export class ItemManager {
         
         this.scene.add(chest);
         this.items.push(chest);
+        return chest;
     }
 
     spawnJuiceBottle(x, z) {
@@ -199,6 +205,7 @@ export class ItemManager {
 
         this.scene.add(bottle);
         this.items.push(bottle);
+        return bottle;
     }
 
     generateID() {
@@ -240,6 +247,7 @@ export class ItemManager {
 
         this.scene.add(pack);
         this.items.push(pack);
+        return pack;
     }
 
     spawnMatrixLoadout(cx = 0, cz = 0) {
@@ -266,7 +274,122 @@ export class ItemManager {
         });
     }
 
-    update() {
+    countNearbyChests(radius = 10) {
+        if (!this.player) return 0;
+        const pos = this.player.position;
+        let count = 0;
+        this.items.forEach(item => {
+            const ud = item.userData || {};
+            if (ud.type !== 'chest' || ud.isOpened) return;
+            const dx = item.position.x - pos.x;
+            const dz = item.position.z - pos.z;
+            if (Math.sqrt(dx * dx + dz * dz) <= radius) count++;
+        });
+        return count;
+    }
+
+    createUmbrella() {
+        const group = new THREE.Group();
+        // Handle
+        const handle = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.08, 0.08, 1.6, 6),
+            new THREE.MeshStandardMaterial({ color: 0x4a3428, roughness: 0.8 })
+        );
+        handle.position.y = -0.2;
+        group.add(handle);
+        // Canopy (voxel-ish stacked plates)
+        const canopyColors = [0xff3b30, 0xf1c40f, 0x3498db];
+        canopyColors.forEach((c, i) => {
+            const plate = new THREE.Mesh(
+                new THREE.BoxGeometry(1.8 - i * 0.3, 0.15, 1.8 - i * 0.3),
+                new THREE.MeshStandardMaterial({ color: c, roughness: 0.4, metalness: 0.2 })
+            );
+            plate.position.y = 0.7 + i * 0.12;
+            group.add(plate);
+        });
+        // Tip
+        const tip = new THREE.Mesh(
+            new THREE.ConeGeometry(0.2, 0.25, 6),
+            new THREE.MeshStandardMaterial({ color: 0x2c3e50 })
+        );
+        tip.position.y = 1.1;
+        group.add(tip);
+        group.castShadow = true;
+        group.receiveShadow = true;
+        return group;
+    }
+
+    spawnMatrixDropNearPlayer() {
+        if (!this.player) return;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 4 + Math.random() * 8;
+        let x = this.player.position.x + Math.cos(angle) * dist;
+        let z = this.player.position.z + Math.sin(angle) * dist;
+        ({ x, z } = this.getClampedCoord(x, z));
+
+        let groundY = 0.5;
+        if (this.world && typeof this.world.getHeightAt === 'function') {
+            groundY = this.world.getHeightAt(x, z) + 0.5;
+        }
+
+        // Random loot choice
+        const lootTable = ['Rifle', 'Sniper', 'Pistol', 'ShieldPotion', 'SMG', 'Shotgun', 'DMR'];
+        const loot = lootTable[Math.floor(Math.random() * lootTable.length)];
+
+        const chest = this.spawnChestWithLoot(x, z, loot);
+        if (chest) {
+            chest.position.y = groundY + 18;
+            chest.userData.isDropping = true;
+            chest.userData.dropTargetY = groundY;
+            chest.userData.dropVelocity = 0;
+            // Attach voxel umbrella while falling
+            const umbrella = this.createUmbrella();
+            umbrella.position.y = 1.2;
+            chest.add(umbrella);
+            chest.userData.umbrella = umbrella;
+        }
+    }
+
+    spawnMatrixDropsBatch() {
+        if (this.countNearbyChests(this.matrixDropRadiusLimit) >= this.matrixDropBatchSize) return;
+        const available = this.matrixDropBatchSize - this.countNearbyChests(this.matrixDropRadiusLimit);
+        const toSpawn = Math.max(0, Math.min(this.matrixDropBatchSize, available));
+        for (let i = 0; i < toSpawn; i++) {
+            this.spawnMatrixDropNearPlayer();
+        }
+    }
+
+    update(dt = 0.016) {
+        const delta = Math.max(0, dt || 0);
+
+        // Matrix mode: periodic drops near player
+        if (this.settings.gameMode === 'matrix' && this.player) {
+            this._matrixDropTimer += delta;
+            if (this._matrixDropTimer >= this.matrixDropInterval) {
+                this._matrixDropTimer = 0;
+                this.spawnMatrixDropsBatch();
+            }
+        }
+
+        // Update falling drops
+        this.items.forEach(item => {
+            const ud = item.userData || {};
+            if (ud.isDropping) {
+                const gravity = 5; // even slower fall for drops
+                ud.dropVelocity = (ud.dropVelocity || 0) + gravity * delta;
+                item.position.y -= ud.dropVelocity * delta;
+                if (item.position.y <= ud.dropTargetY) {
+                    item.position.y = ud.dropTargetY;
+                    ud.isDropping = false;
+                    ud.dropVelocity = 0;
+                    if (ud.umbrella) {
+                        try { item.remove(ud.umbrella); } catch (e) {}
+                        ud.umbrella = null;
+                    }
+                }
+            }
+        });
+
         // Check for nearby items
         let nearbyItem = null;
         const playerPos = this.player.position;

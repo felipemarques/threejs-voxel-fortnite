@@ -4,6 +4,7 @@ import gunshotSfx from './assets/mixkit-game-gun-shot.ogg';
 import smackSfx from './assets/smack.ogg';
 import ughSfx from './assets/ugh.ogg';
 import footStepsSfx from './assets/mixkit-footsteps-on-tall-grass-532.ogg';
+import vehicleDoorSfx from './assets/mixkit-car-door-slam.wav';
 
 
 export class Player {
@@ -123,6 +124,12 @@ export class Player {
         this.footstepsBuffer = null;
         this._footstepsSource = null;
         this._footstepsGain = null;
+        this.vehicleDoorBuffer = null;
+        this.vehicleDriveBuffer = null;
+        this._vehicleDriveSource = null;
+        this._vehicleDriveGain = null;
+        this._lastVehicleDriveActive = false;
+        this.enableVehicleDriveSound = false; // Keep silent for now; ready for future engine SFX
         this._hurtAccumulator = 0;
         this._hurtQueue = 0;
         this._hurtBeatTimer = null;
@@ -136,11 +143,11 @@ export class Player {
         this.isInVehicle = false;
         this.currentVehicle = null;
         this.vehicleSpeed = 0;
-        this.vehicleBaseMaxSpeed = 42;
-        this.vehicleBoostMax = 30; // extra speed gained by sustained acceleration
-        this.vehicleAccel = 45;
+        this.vehicleBaseMaxSpeed = 70;
+        this.vehicleBoostMax = 45; // extra speed gained by sustained acceleration
+        this.vehicleAccel = 70;
         this.vehicleTurnSpeed = 1.8;
-        this.vehicleFriction = 3.5;
+        this.vehicleFriction = 2.8;
         this.vehicleAccelHold = 0; // ramps up as you keep accelerating
         this.vehiclePromptEl = document.getElementById('interaction-prompt');
         this.nearVehicle = null;
@@ -195,6 +202,15 @@ export class Player {
                         this.footstepsBuffer = audioBuffer;
                     })
                     .catch(e => console.warn('Error loading footsteps SFX:', e));
+
+                // Load vehicle door buffer
+                fetch(vehicleDoorSfx)
+                    .then(response => response.arrayBuffer())
+                    .then(arrayBuffer => this.audioCtx.decodeAudioData(arrayBuffer))
+                    .then(audioBuffer => {
+                        this.vehicleDoorBuffer = audioBuffer;
+                    })
+                    .catch(e => console.warn('Error loading vehicle door SFX:', e));
             }
         } catch (e) {
             console.warn('Web Audio API not supported:', e);
@@ -1205,10 +1221,18 @@ export class Player {
 
     enterVehicle(vehicle) {
         if (!vehicle || this.isInVehicle) return false;
+        if (!vehicle.userData) vehicle.userData = {};
+        if (!vehicle.userData.hasFrontAligned) {
+            vehicle.rotation.y += Math.PI; // flip once so model faces travel direction
+            vehicle.userData.hasFrontAligned = true;
+        }
         this.isInVehicle = true;
         this.vehicleAccelHold = 0;
         this.currentVehicle = vehicle;
         this.vehicleSpeed = 0;
+        this.stopFootsteps();
+        this.stopVehicleDriveSound();
+        this.playVehicleDoor();
         this.mesh.visible = false;
         this.velocity.set(0, 0, 0);
         this.mesh.position.copy(vehicle.position);
@@ -1221,6 +1245,14 @@ export class Player {
             return;
         }
         const vehicle = this.currentVehicle;
+        this.playVehicleDoor();
+        this.stopVehicleDriveSound();
+        this.stopFootsteps(); // ensure walking loop is silenced when transitioning out of vehicles
+        if (this.world && typeof this.world.getHeightAt === 'function') {
+            const groundY = this.world.getHeightAt(vehicle.position.x, vehicle.position.z);
+            const clearance = this.getVehicleGroundClearance(vehicle);
+            vehicle.position.y = groundY + clearance;
+        }
         const exitOffset = new THREE.Vector3(-1.5, 0, -2).applyEuler(vehicle.rotation);
         const exitPos = vehicle.position.clone().add(exitOffset);
         this.mesh.position.copy(exitPos);
@@ -1242,12 +1274,27 @@ export class Player {
         }
     }
 
+    getVehicleGroundClearance(vehicle) {
+        if (!vehicle) return 0.05;
+        const ud = vehicle.userData || {};
+        if (typeof ud.groundClearance === 'number') {
+            return ud.groundClearance;
+        }
+        if (typeof ud.wheelRadius === 'number' && typeof ud.wheelCenterY === 'number') {
+            return Math.max(0, ud.wheelRadius - ud.wheelCenterY);
+        }
+        return 0.05;
+    }
+
     updateVehicleDrive(dt) {
         const vehicle = this.currentVehicle;
         if (!vehicle) {
             this.isInVehicle = false;
             return;
         }
+
+        // Ensure walking loop is silent while driving
+        this.stopFootsteps();
 
         let accelInput = 0;
         if (this.moveForward) accelInput += 1;
@@ -1268,7 +1315,7 @@ export class Player {
         if (this.moveLeft) vehicle.rotation.y += this.vehicleTurnSpeed * dt * turnDir;
         if (this.moveRight) vehicle.rotation.y -= this.vehicleTurnSpeed * dt * turnDir;
 
-        const forward = new THREE.Vector3(0, 0, -1).applyEuler(vehicle.rotation);
+        const forward = new THREE.Vector3(0, 0, 1).applyEuler(vehicle.rotation);
         const desired = vehicle.position.clone().addScaledVector(forward, this.vehicleSpeed * dt);
 
         // Basic collision against world objects (treat as spheres)
@@ -1280,7 +1327,8 @@ export class Player {
 
         if (this.world && typeof this.world.getHeightAt === 'function') {
             const groundY = this.world.getHeightAt(vehicle.position.x, vehicle.position.z);
-            vehicle.position.y = groundY + 0.4;
+            const clearance = this.getVehicleGroundClearance(vehicle);
+            vehicle.position.y = groundY + clearance;
         }
 
         if (this.world && typeof this.world.halfMapSize === 'number') {
@@ -1312,10 +1360,15 @@ export class Player {
             });
         }
 
-        const camOffset = new THREE.Vector3(0, 2, 6).applyEuler(new THREE.Euler(0, vehicle.rotation.y, 0));
-        const targetCamPos = vehicle.position.clone().add(camOffset);
-        this.camera.position.lerp(targetCamPos, 0.15);
-        this.camera.lookAt(vehicle.position);
+        // Allow camera orbit while in vehicle, similar to on-foot TPS orbit
+        const lookTarget = vehicle.position.clone();
+        const camOffset = new THREE.Vector3(0, 2, 6).applyQuaternion(this.camera.quaternion);
+        const targetCamPos = lookTarget.clone().add(camOffset);
+        this.camera.position.lerp(targetCamPos, 0.18);
+
+        // Ready for future engine SFX without playing anything yet
+        const driveActive = Math.abs(this.vehicleSpeed) > 0.5;
+        this.handleVehicleDriveSound(driveActive);
     }
 
     checkVehicleCollision(targetPos) {
@@ -1586,8 +1639,92 @@ export class Player {
         }
     }
 
+    playVehicleDoor() {
+        try {
+            if (this.audioCtx) {
+                if (this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume().then(() => this.playVehicleDoor());
+                    return;
+                }
+                if (this.vehicleDoorBuffer) {
+                    const src = this.audioCtx.createBufferSource();
+                    src.buffer = this.vehicleDoorBuffer;
+                    const gain = this.audioCtx.createGain();
+                    gain.gain.value = this.sfxVolume;
+                    src.connect(gain);
+                    gain.connect(this.audioCtx.destination);
+                    src.start(0);
+                }
+            }
+        } catch (e) {
+            console.warn('playVehicleDoor error:', e);
+        }
+    }
+
+    handleVehicleDriveSound(active) {
+        try {
+            if (!this.audioCtx || !this.enableVehicleDriveSound) {
+                this.stopVehicleDriveSound();
+                return;
+            }
+            if (!this.vehicleDriveBuffer) {
+                this.stopVehicleDriveSound();
+                return;
+            }
+            if (active === this._lastVehicleDriveActive && ((active && this._vehicleDriveSource) || (!active && !this._vehicleDriveSource))) {
+                return;
+            }
+
+            this._lastVehicleDriveActive = active;
+
+            if (active) {
+                if (this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
+                if (this._vehicleDriveSource) {
+                    return;
+                }
+                const src = this.audioCtx.createBufferSource();
+                src.buffer = this.vehicleDriveBuffer;
+                src.loop = true;
+                const gain = this.audioCtx.createGain();
+                gain.gain.value = this.sfxVolume * 0.4;
+                src.connect(gain);
+                gain.connect(this.audioCtx.destination);
+                src.start(0);
+                this._vehicleDriveSource = src;
+                this._vehicleDriveGain = gain;
+                src.onended = () => {
+                    this._vehicleDriveSource = null;
+                    this._vehicleDriveGain = null;
+                };
+            } else {
+                this.stopVehicleDriveSound();
+            }
+        } catch (e) {
+            console.warn('handleVehicleDriveSound error:', e);
+        }
+    }
+
+    stopVehicleDriveSound() {
+        this._lastVehicleDriveActive = false;
+        if (this._vehicleDriveSource) {
+            try { this._vehicleDriveSource.stop(); } catch (e) {}
+            try { this._vehicleDriveSource.disconnect(); } catch (e) {}
+        }
+        if (this._vehicleDriveGain) {
+            try { this._vehicleDriveGain.disconnect(); } catch (e) {}
+        }
+        this._vehicleDriveSource = null;
+        this._vehicleDriveGain = null;
+    }
+
     handleFootsteps(active) {
         try {
+            if (this.isInVehicle) {
+                this.stopFootsteps();
+                return;
+            }
             if (!this.audioCtx || !this.footstepsBuffer) {
                 this.stopFootsteps();
                 return;
