@@ -436,6 +436,9 @@ class Game {
         palette.classList.toggle('hidden', !isStudio);
         if (!isStudio) return;
 
+        // Enable dragging to avoid overlap with touch controls
+        this.initStudioPaletteDrag(palette);
+
         // Bind all palette buttons (prefab + resume)
         const buttons = palette.querySelectorAll('button');
         buttons.forEach(btn => {
@@ -574,6 +577,63 @@ class Game {
         };
 
         canvas.addEventListener('click', this._objectClickHandler);
+    }
+
+    initStudioPaletteDrag(palette) {
+        if (!palette || palette._dragInit) return;
+        palette._dragInit = true;
+        const handle = palette.querySelector('.palette-title') || palette;
+        let dragging = false;
+        let offsetX = 0;
+        let offsetY = 0;
+        let startX = 0;
+        let startY = 0;
+        let rectCache = null;
+
+        const onMove = (ev) => {
+            // Start dragging after small threshold to avoid resizing on simple clicks
+            if (!dragging) {
+                const dx = Math.abs(ev.clientX - startX);
+                const dy = Math.abs(ev.clientY - startY);
+                if (dx < 3 && dy < 3) return;
+                dragging = true;
+                if (rectCache) {
+                    palette.style.right = 'auto';
+                    palette.style.bottom = 'auto';
+                    palette.style.position = 'fixed';
+                    palette.style.width = `${rectCache.width}px`; // keep size while moving
+                    palette.style.left = `${rectCache.left}px`;
+                    palette.style.top = `${rectCache.top}px`;
+                }
+            }
+            const rect = palette.getBoundingClientRect();
+            const x = Math.max(0, Math.min(window.innerWidth - rect.width, ev.clientX - offsetX));
+            const y = Math.max(0, Math.min(window.innerHeight - rect.height, ev.clientY - offsetY));
+            palette.style.left = `${x}px`;
+            palette.style.top = `${y}px`;
+        };
+
+        const onUp = () => {
+            dragging = false;
+            handle.releasePointerCapture && handle.releasePointerCapture(handle._dragPointerId);
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+        };
+
+        handle.addEventListener('pointerdown', (ev) => {
+            try { ev.preventDefault(); } catch (e) {}
+            const rect = palette.getBoundingClientRect();
+            rectCache = rect;
+            offsetX = ev.clientX - rect.left;
+            offsetY = ev.clientY - rect.top;
+            startX = ev.clientX;
+            startY = ev.clientY;
+            dragging = false;
+            handle._dragPointerId = ev.pointerId;
+            handle.setPointerCapture && handle.setPointerCapture(ev.pointerId);
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
+        });
     }
 
     togglePause() {
