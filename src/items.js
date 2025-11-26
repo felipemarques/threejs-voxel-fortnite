@@ -406,6 +406,11 @@ export class ItemManager {
             }
         }
 
+        // If vehicle prompt is active, don't override the interaction prompt
+        if (this.interactionPrompt && this.interactionPrompt.dataset.vehiclePrompt === '1') {
+            return;
+        }
+
         if (nearbyItem) {
             this.interactionPrompt.classList.remove('hidden');
             const data = nearbyItem.userData || {};

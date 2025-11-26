@@ -90,6 +90,12 @@ class Game {
 
         // Setup Menu
         this.setupMenu();
+
+        // Soften pointer lock errors in environments that reject the request (e.g. ESC before completion)
+        document.addEventListener('pointerlockerror', (ev) => {
+            ev.preventDefault && ev.preventDefault();
+            console.warn('Pointer lock request failed or was cancelled.');
+        });
     }
 
     updateDebugToggleVisibility(enabled) {
@@ -337,6 +343,9 @@ class Game {
         canvas.addEventListener('pointerdown', () => {
             if (IS_MOBILE) return;
             try {
+                const menuVisible = document.getElementById('main-menu') && document.getElementById('main-menu').style.display !== 'none';
+                const isStudio = this.player && this.player.gameMode === 'studio';
+                if (this.isPaused || menuVisible || isStudio) return;
                 if (this.player && this.player.controls && !this.player.controls.isLocked && !this.player.isDead) {
                     this.player.lockControls();
                 }
@@ -360,6 +369,9 @@ class Game {
             }
         } catch (e) {}
 
+        // Studio palette
+        this.setupStudioPalette(effectiveSettings);
+
         // Lock pointer immediately after Play click (desktop)
         if (!IS_MOBILE && this.player && this.player.controls && !this.player.controls.isLocked) {
             try {
@@ -368,6 +380,51 @@ class Game {
         }
 
         this.animate();
+    }
+
+    setupStudioPalette(settings) {
+        const palette = document.getElementById('studio-palette');
+        if (!palette) return;
+        const isStudio = settings && settings.gameMode === 'studio';
+        palette.classList.toggle('hidden', !isStudio);
+        if (!isStudio) return;
+
+        const buttons = palette.querySelectorAll('button[data-prefab]');
+        buttons.forEach(btn => {
+            if (btn._boundStudio) return;
+            btn._boundStudio = true;
+            btn.addEventListener('click', () => {
+                if (!this.player || !this.world) return;
+                const action = btn.getAttribute('data-action');
+                if (action === 'resume') {
+                    this.isPaused = false;
+                    if (this.player && this.player.controls && !this.player.controls.isLocked) {
+                        try { this.player.controls.lock(); } catch (e) {}
+                    }
+                    const menu = document.getElementById('main-menu');
+                    if (menu) menu.style.display = 'none';
+                    if (this.bgAudio && this.bgAudio.paused) this.playBackgroundMusic();
+                    return;
+                }
+                const prefab = btn.getAttribute('data-prefab');
+                const vehicleType = btn.getAttribute('data-vehicle-type');
+                const treeType = btn.getAttribute('data-tree-type');
+                const submenuTarget = btn.getAttribute('data-submenu');
+                if (submenuTarget) {
+                    const menu = document.getElementById(submenuTarget);
+                    if (menu) menu.classList.toggle('hidden');
+                    return;
+                }
+                // Mark active selection for click-to-place
+                this.studioSelectedPrefab = prefab;
+                this.studioSelectedOptions = vehicleType ? { variant: vehicleType } : (treeType ? { variant: treeType } : {});
+                // Close any submenu
+                if (submenuTarget) {
+                    const menu = document.getElementById(submenuTarget);
+                    if (menu) menu.classList.add('hidden');
+                }
+            });
+        });
     }
 
     setupObjectInspector() {
@@ -386,7 +443,29 @@ class Game {
             if (!this.player || !this.hud) return;
             const mode = this.player.gameMode || 'survival';
             // Feature intended for arcade/survival style play (skip matrix/studio)
-            if (mode === 'matrix' || mode === 'studio') return;
+            if (mode === 'matrix') return;
+
+            // Studio click-to-place prefab
+            if (mode === 'studio' && this.studioSelectedPrefab) {
+                const rect = canvas.getBoundingClientRect();
+                const ndcX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                const ndcY = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+                const ray = new THREE.Raycaster();
+                ray.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
+                const hits = ray.intersectObjects(this.world.objects, true);
+                let groundHit = null;
+                for (const h of hits) {
+                    if (h.object && h.object.userData && h.object.userData.gameName === 'Ground') {
+                        groundHit = h;
+                        break;
+                    }
+                }
+                if (groundHit && typeof this.world.spawnPrefab === 'function') {
+                    const opts = this.studioSelectedOptions || {};
+                    this.world.spawnPrefab(this.studioSelectedPrefab, groundHit.point.x, groundHit.point.z, opts);
+                }
+                return;
+            }
 
             let ndcX = 0;
             let ndcY = 0;

@@ -20,6 +20,48 @@
         <div id="hover-info" style="position:absolute; top:48%; left:50%; transform:translate(-50%, -100%); color:#fff; pointer-events:none; font-family:Arial; font-size:14px; text-shadow:0 0 6px rgba(0,0,0,0.8);"></div>
         <!-- Click selection info -->
         <div id="selection-info" class="hidden" aria-live="polite"></div>
+        <!-- Vehicle HUD -->
+        <div id="vehicle-hud" class="hidden" aria-label="Vehicle HUD">
+            <div class="vh-row">
+                <span>Speed</span><span id="vehicle-speed">0</span><span>km/h</span>
+            </div>
+            <div class="vh-row fuel-row">
+                <span>Fuel</span>
+                <div id="vehicle-fuel-bar"><div id="vehicle-fuel-fill"></div></div>
+                <span id="vehicle-fuel-text">100%</span>
+            </div>
+            <div class="vh-row">
+                <span>Distance</span><span id="vehicle-distance">0.0</span><span>km</span>
+            </div>
+        </div>
+        <!-- Studio palette -->
+        <div id="studio-palette" class="hidden" aria-label="Studio Palette">
+            <div class="palette-title">STUDIO TOOLS</div>
+            <div class="palette-grid">
+                <button id="studio-resume-btn" data-action="resume">Resume & Lock</button>
+                <button data-prefab="house">House</button>
+                <button data-prefab="mansion">Mansion</button>
+                <button data-prefab="cabin">Cabin</button>
+                <button data-prefab="smallBuilding">Small Building</button>
+                <button data-prefab="plateau">Plateau</button>
+                <button data-prefab="rock">Rock</button>
+                <div class="palette-submenu">
+                    <button data-prefab="tree" data-submenu="tree-menu">Tree ▾</button>
+                    <div id="tree-menu" class="submenu hidden">
+                        <button data-prefab="tree" data-tree-type="Oak">Oak</button>
+                        <button data-prefab="tree" data-tree-type="Pine">Pine</button>
+                    </div>
+                </div>
+                <div class="palette-submenu">
+                    <button data-prefab="vehicle" data-submenu="vehicle-menu">Vehicle ▾</button>
+                    <div id="vehicle-menu" class="submenu hidden">
+                        <button data-prefab="vehicle" data-vehicle-type="car">Car</button>
+                        <button data-prefab="vehicle" data-vehicle-type="truck">Truck</button>
+                    </div>
+                </div>
+                <button data-prefab="crate">Crate</button>
+            </div>
+        </div>
 
         <!-- Storm Timer -->
         <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>

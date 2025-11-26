@@ -319,6 +319,136 @@ html {
     opacity: 0.95;
 }
 
+#studio-palette {
+    position: absolute;
+    right: 20px;
+    bottom: 120px;
+    width: 220px;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 12px;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    z-index: 210;
+    pointer-events: auto;
+}
+
+#studio-palette .palette-title {
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+#studio-palette .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+#studio-palette button {
+    padding: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.15s, transform 0.1s;
+    pointer-events: auto;
+}
+
+#studio-palette button:hover {
+    background: rgba(255,255,255,0.16);
+    transform: translateY(-1px);
+}
+
+#studio-palette button:active {
+    transform: translateY(1px);
+}
+
+#studio-resume-btn {
+    grid-column: span 2;
+    background: linear-gradient(135deg, #00d8ff, #0077b6);
+    border-color: rgba(255,255,255,0.3);
+    font-weight: 800;
+}
+
+#vehicle-hud {
+    position: absolute;
+    top: 20px;
+    right: 220px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: #fff;
+    font-family: monospace;
+    font-size: 12px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.12);
+    pointer-events: none;
+    z-index: 180;
+}
+
+#vehicle-hud.hidden {
+    display: none !important;
+}
+
+.vh-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.fuel-row {
+    grid-template-columns: auto 1fr auto;
+}
+
+#vehicle-fuel-bar {
+    position: relative;
+    width: 120px;
+    height: 10px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+#vehicle-fuel-fill {
+    position: absolute;
+    top: 0; left: 0;
+    bottom: 0;
+    width: 100%;
+    background: linear-gradient(90deg, #8bc34a, #cddc39);
+}
+
+#vehicle-fuel-text {
+    font-weight: 700;
+}
+
+.palette-submenu {
+    position: relative;
+}
+
+.palette-submenu .submenu {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    margin-top: 6px;
+    background: rgba(0, 0, 0, 0.9);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    padding: 8px;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: 1fr;
+    z-index: 211;
+}
+
 /* Debug labels for rendered objects */
 .debug-label {
     pointer-events: none;
@@ -515,26 +645,6 @@ html {
     box-shadow: none;
 }
 
-#float-btn {
-    position: absolute;
-    top: 70px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 16px;
-    border-radius: 8px;
-    background: #e67e22;
-    color: #fff;
-    font-weight: bold;
-    border: none;
-    cursor: pointer;
-    z-index: 150;
-    pointer-events: auto;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-}
-
-#float-btn.hidden {
-    display: none !important;
-}
 
 /* Responsive adjustments for smaller screens */
 @media (max-width: 768px) {
@@ -823,18 +933,21 @@ html {
 }
 #float-btn {
     position: absolute;
-    top: 70px;
-    right: 12px;
-    padding: 10px 16px;
-    border-radius: 8px;
-    background: #e67e22;
-    color: #fff;
-    font-weight: bold;
-    border: none;
+    top: 150px; /* just below the dashboard in the top-left */
+    left: 10px;
+    width: 200px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ffb347, #ff7f0e);
+    color: #0f0f0f;
+    font-weight: 800;
+    border: 1px solid rgba(0,0,0,0.2);
     cursor: pointer;
     z-index: 150;
     pointer-events: auto;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    letter-spacing: 0.5px;
+    text-align: center;
 }
 
 #float-btn.hidden {

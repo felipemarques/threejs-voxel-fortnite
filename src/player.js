@@ -151,6 +151,26 @@ export class Player {
         this.vehicleAccelHold = 0; // ramps up as you keep accelerating
         this.vehiclePromptEl = document.getElementById('interaction-prompt');
         this.nearVehicle = null;
+        this.vehicleFuel = 0;
+        this.vehicleFuelCapacity = 0;
+        this.vehicleDistance = 0;
+        this.vehicleHud = {
+            root: document.getElementById('vehicle-hud'),
+            speed: document.getElementById('vehicle-speed'),
+            fuelBar: document.getElementById('vehicle-fuel-bar'),
+            fuelFill: document.getElementById('vehicle-fuel-fill'),
+            fuelText: document.getElementById('vehicle-fuel-text'),
+            distance: document.getElementById('vehicle-distance')
+        };
+
+        // Studio selection state
+        this.studioSelected = null;
+        this._studioRaycaster = new THREE.Raycaster();
+        this.studioSelectionHelper = null;
+        this.selectionInfo = document.getElementById('selection-info');
+
+        // Disable PointerLock requirement in Studio so clicks can select prefabs without lock
+        this.controls.enabled = this.gameMode !== 'studio';
         
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -463,6 +483,25 @@ export class Player {
 
         // Movement
         const onKeyDown = (event) => {
+            // Studio selection move/delete when an object is selected
+            if (this.gameMode === 'studio' && this.studioSelected) {
+                const step = 2;
+                const verticalStep = 1.5;
+                switch (event.code) {
+                    case 'ArrowUp':
+                        if (event.shiftKey) this.moveSelectedObject(0, 0, verticalStep);
+                        else this.moveSelectedObject(0, -step);
+                        event.preventDefault(); return;
+                    case 'ArrowDown':
+                        if (event.shiftKey) this.moveSelectedObject(0, 0, -verticalStep);
+                        else this.moveSelectedObject(0, step);
+                        event.preventDefault(); return;
+                    case 'ArrowLeft': this.moveSelectedObject(-step, 0); event.preventDefault(); return;
+                    case 'ArrowRight': this.moveSelectedObject(step, 0); event.preventDefault(); return;
+                    case 'KeyX': this.removeSelectedObject(); event.preventDefault(); return;
+                }
+            }
+
             switch (event.code) {
                 case 'ArrowUp':
                 case 'KeyW': this.moveForward = true; break;
@@ -516,8 +555,13 @@ export class Player {
                     break;
                 case 'KeyX':
                     if (this.gameMode === 'studio') {
-                        if (this.selectedBlock) this.removeBlock(this.selectedBlock);
-                        else this.removeLastBlock();
+                        if (this.studioSelected) {
+                            this.removeSelectedObject();
+                        } else if (this.selectedBlock) {
+                            this.removeBlock(this.selectedBlock);
+                        } else {
+                            this.removeLastBlock();
+                        }
                     }
                     break;
                 case 'KeyR': this.reload(); break;
@@ -571,8 +615,10 @@ export class Player {
         const onMouseDown = (event) => {
             if (this.controls.isLocked) {
                 if (this.gameMode === 'studio') {
-                    const hit = this.selectBlockUnderCrosshair();
-                    if (hit) return; // consume click for selection
+                    const hitObj = this.selectStudioObject(event);
+                    if (hitObj) return; // consume click for selection/move
+                    const hitBlock = this.selectBlockUnderCrosshair();
+                    if (hitBlock) return;
                 }
                 if (event.button === 0) { // Left Click
                     this.shoot();
@@ -603,6 +649,10 @@ export class Player {
             console.warn('Pointer Lock API not available in this environment.');
             return;
         }
+        // Avoid locking when menu/paused overlays are active
+        const menu = document.getElementById('main-menu');
+        if (menu && menu.style.display !== 'none') return;
+        if (this.isPaused) return;
 
         try {
             this.controls.lock();
@@ -1184,7 +1234,7 @@ export class Player {
     }
 
     findNearbyVehicle() {
-        if (!this.worldObjects || this.gameMode === 'studio') return null;
+        if (!this.worldObjects) return null;
         let closest = null;
         let closestDist = 4; // meters
         this.worldObjects.forEach(obj => {
@@ -1230,12 +1280,17 @@ export class Player {
         this.vehicleAccelHold = 0;
         this.currentVehicle = vehicle;
         this.vehicleSpeed = 0;
+        const vType = (vehicle.userData && vehicle.userData.vehicleType) || 'car';
+        this.vehicleFuelCapacity = vType === 'truck' ? 60 : 40; // liters
+        this.vehicleFuel = this.vehicleFuelCapacity;
+        this.vehicleDistance = 0;
         this.stopFootsteps();
         this.stopVehicleDriveSound();
         this.playVehicleDoor();
         this.mesh.visible = false;
         this.velocity.set(0, 0, 0);
         this.mesh.position.copy(vehicle.position);
+        this.updateVehicleHUD(true);
         return true;
     }
 
@@ -1268,6 +1323,7 @@ export class Player {
         this.currentVehicle = null;
         this.vehicleSpeed = 0;
         this.canJump = true;
+        this.updateVehicleHUD(false);
         if (this.vehiclePromptEl && this.vehiclePromptEl.dataset.vehiclePrompt === '1') {
             this.vehiclePromptEl.classList.add('hidden');
             delete this.vehiclePromptEl.dataset.vehiclePrompt;
@@ -1296,6 +1352,17 @@ export class Player {
         // Ensure walking loop is silent while driving
         this.stopFootsteps();
 
+        const prevPos = vehicle.position.clone();
+
+        // Stop everything if out of fuel
+        if (this.vehicleFuel <= 0) {
+            this.vehicleSpeed = 0;
+            this.mesh.position.copy(vehicle.position);
+            this.previousPosition.copy(vehicle.position);
+            this.updateVehicleHUD(true);
+            return;
+        }
+
         let accelInput = 0;
         if (this.moveForward) accelInput += 1;
         if (this.moveBackward) accelInput -= 1;
@@ -1311,6 +1378,14 @@ export class Player {
         this.vehicleSpeed = Math.min(maxFwd, Math.max(-maxBack, this.vehicleSpeed));
         this.vehicleSpeed *= Math.max(0, 1 - this.vehicleFriction * dt);
 
+        // Fuel consumption (only when moving)
+        if (Math.abs(this.vehicleSpeed) > 0.1) {
+            this.vehicleFuel = Math.max(0, this.vehicleFuel - (8 * dt));
+            if (this.vehicleFuel <= 0) {
+                this.vehicleSpeed = 0;
+            }
+        }
+
         const turnDir = (this.vehicleSpeed >= 0 ? 1 : -1);
         if (this.moveLeft) vehicle.rotation.y += this.vehicleTurnSpeed * dt * turnDir;
         if (this.moveRight) vehicle.rotation.y -= this.vehicleTurnSpeed * dt * turnDir;
@@ -1319,7 +1394,7 @@ export class Player {
         const desired = vehicle.position.clone().addScaledVector(forward, this.vehicleSpeed * dt);
 
         // Basic collision against world objects (treat as spheres)
-        if (this.checkVehicleCollision(desired)) {
+        if (this.checkVehicleCollision(desired, vehicle)) {
             this.vehicleSpeed *= 0.2; // bounce/slow on impact
         } else {
             vehicle.position.copy(desired);
@@ -1343,6 +1418,26 @@ export class Player {
         }
         this.mesh.position.copy(vehicle.position);
         this.previousPosition.copy(vehicle.position);
+
+        // Rotate wheels based on traveled distance
+        const movedDist = vehicle.position.distanceTo(prevPos);
+        this.rotateVehicleWheels(vehicle, movedDist);
+
+        // Fuel consumption based on distance (liters per meter)
+        if (movedDist > 0) {
+            const type = (vehicle.userData && vehicle.userData.vehicleType) || 'car';
+            const efficiencyKmPerL = type === 'truck' ? 6 : 10; // trucks: 6 km/L, cars: 10 km/L
+            const kmMoved = movedDist / 1000; // world units treated as meters
+            const fuelUsed = kmMoved / efficiencyKmPerL;
+            this.vehicleFuel = Math.max(0, this.vehicleFuel - fuelUsed);
+            if (this.vehicleFuel <= 0) {
+                this.vehicleSpeed = 0;
+            }
+            this.vehicleDistance += kmMoved;
+        }
+
+        // Update vehicle HUD display
+        this.updateVehicleHUD(true);
 
         if (this.enemyManager && Array.isArray(this.enemyManager.enemies)) {
             const now = performance.now();
@@ -1371,14 +1466,163 @@ export class Player {
         this.handleVehicleDriveSound(driveActive);
     }
 
-    checkVehicleCollision(targetPos) {
+    rotateVehicleWheels(vehicle, distanceMoved) {
+        if (!vehicle || !vehicle.userData || !vehicle.userData.wheels || !vehicle.userData.wheels.length) return;
+        const radius = vehicle.userData.wheelRadius || 0.35;
+        const rot = (distanceMoved / (radius || 0.35));
+        vehicle.userData.wheels.forEach(w => {
+            try { w.rotation.x -= rot; } catch (e) {}
+        });
+    }
+
+    updateVehicleHUD(show) {
+        if (!this.vehicleHud || !this.vehicleHud.root) return;
+        const root = this.vehicleHud.root;
+        if (!show) {
+            root.classList.add('hidden');
+            return;
+        }
+        root.classList.remove('hidden');
+        const speedKmh = Math.abs(this.vehicleSpeed) * 3.6;
+        if (this.vehicleHud.speed) this.vehicleHud.speed.innerText = speedKmh.toFixed(0);
+        if (this.vehicleHud.fuelFill) {
+            const capacity = this.vehicleFuelCapacity || 1;
+            const pct = Math.max(0, Math.min(100, (this.vehicleFuel / capacity) * 100));
+            this.vehicleHud.fuelFill.style.width = `${pct}%`;
+            this.vehicleHud.fuelFill.style.background = pct < 20 ? 'linear-gradient(90deg, #ff7043, #ff3d00)' : 'linear-gradient(90deg, #8bc34a, #cddc39)';
+        }
+        if (this.vehicleHud.fuelText) {
+            const capacity = this.vehicleFuelCapacity || 1;
+            const pct = Math.max(0, Math.min(100, (this.vehicleFuel / capacity) * 100));
+            this.vehicleHud.fuelText.innerText = `${pct.toFixed(0)}%`;
+        }
+        if (this.vehicleHud.distance) {
+            this.vehicleHud.distance.innerText = this.vehicleDistance.toFixed(1);
+        }
+    }
+
+    selectStudioObject(event) {
+        if (this.gameMode !== 'studio' || !this.worldObjects || this.worldObjects.length === 0) return null;
+        const mouse = new THREE.Vector2();
+        if (this.controls && this.controls.isLocked) {
+            mouse.set(0, 0);
+        } else if (event && event.clientX !== undefined) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        } else {
+            mouse.set(0, 0);
+        }
+        this._studioRaycaster.setFromCamera(mouse, this.camera);
+        const pickables = this.worldObjects.filter(o => o && o.userData && o.userData.gameName !== 'Ground');
+        const hits = this._studioRaycaster.intersectObjects(pickables, true);
+        if (!hits.length) {
+            this.clearStudioSelection();
+            return null;
+        }
+        let obj = hits[0].object;
+        while (obj && !this.worldObjects.includes(obj)) {
+            obj = obj.parent;
+        }
+        if (obj) {
+            this.setStudioSelection(obj);
+        }
+        return obj;
+    }
+
+    moveSelectedObject(dx, dz, dy = 0) {
+        if (!this.studioSelected) return;
+        const obj = this.studioSelected;
+        obj.position.x += dx;
+        obj.position.z += dz;
+        obj.position.y += dy;
+        if (dy === 0 && this.world && typeof this.world.getHeightAt === 'function') {
+            obj.position.y = this.world.getHeightAt(obj.position.x, obj.position.z);
+        }
+        this.refreshStudioSelectionHelper();
+    }
+
+    clearStudioSelection() {
+        this.studioSelected = null;
+        if (this.studioSelectionHelper) {
+            try { this.scene.remove(this.studioSelectionHelper); } catch (e) {}
+            this.studioSelectionHelper = null;
+        }
+        if (this.selectionInfo) {
+            this.selectionInfo.classList.add('hidden');
+        }
+    }
+
+    removeSelectedObject() {
+        if (!this.studioSelected) return;
+        const obj = this.studioSelected;
+        this.clearStudioSelection();
+        try { this.scene.remove(obj); } catch (e) {}
+        if (this.worldObjects) {
+            const idx = this.worldObjects.indexOf(obj);
+            if (idx >= 0) this.worldObjects.splice(idx, 1);
+        }
+    }
+
+    setStudioSelection(obj) {
+        this.studioSelected = obj;
+        if (this.selectionInfo) {
+            const data = obj.userData || {};
+            this.selectionInfo.innerText = `${data.gameName || 'Object'} (${data.gameId || '---'})`;
+            this.selectionInfo.classList.remove('hidden');
+        }
+        this.refreshStudioSelectionHelper();
+    }
+
+    refreshStudioSelectionHelper() {
+        if (this.studioSelectionHelper) {
+            try { this.scene.remove(this.studioSelectionHelper); } catch (e) {}
+            this.studioSelectionHelper = null;
+        }
+        if (!this.studioSelected) return;
+        try {
+            const box = this.buildStudioSelectionBox(this.studioSelected);
+            this.studioSelectionHelper = new THREE.Box3Helper(box, 0xffd700);
+            this.studioSelectionHelper.material.depthTest = false;
+            this.studioSelectionHelper.material.transparent = true;
+            this.studioSelectionHelper.material.opacity = 0.9;
+            this.scene.add(this.studioSelectionHelper);
+        } catch (e) {
+            this.studioSelectionHelper = null;
+        }
+    }
+
+    buildStudioSelectionBox(obj) {
+        const box = new THREE.Box3();
+        obj.traverse(child => {
+            if (!child.isMesh || !child.geometry) return;
+            const ud = child.userData || {};
+            const mat = child.material;
+            const isTransparent = mat && mat.transparent;
+            if (isTransparent || ud.isShadow || ud.shadow) return;
+            if (!child.geometry.boundingBox) {
+                try { child.geometry.computeBoundingBox(); } catch (e) {}
+            }
+            if (child.geometry.boundingBox) {
+                const childBox = child.geometry.boundingBox.clone();
+                child.updateWorldMatrix(true, false);
+                childBox.applyMatrix4(child.matrixWorld);
+                box.union(childBox);
+            }
+        });
+        if (box.isEmpty()) {
+            box.setFromCenterAndSize(obj.position, new THREE.Vector3(1, 1, 1));
+        }
+        return box;
+    }
+
+    checkVehicleCollision(targetPos, currentVehicle = null) {
         if (!this.worldObjects) return false;
         const radius = 2.0;
         for (let i = 0; i < this.worldObjects.length; i++) {
             const obj = this.worldObjects[i];
             if (!obj) continue;
             const ud = obj.userData || {};
-            if (ud.type === 'vehicle') continue; // ignore self/other vehicles for now
+            if (currentVehicle && obj === currentVehicle) continue;
             if (ud.gameName === 'Ground' || ud.type === 'ground') continue; // allow driving over ground plane
 
             const objPos = obj.position || (obj.getWorldPosition ? obj.getWorldPosition(new THREE.Vector3()) : null);
@@ -1389,6 +1633,8 @@ export class Player {
                 objRadius = obj.geometry.boundingSphere.radius || objRadius;
             } else if (ud && ud.size === 'large') {
                 objRadius = 5;
+            } else if (ud.type === 'vehicle') {
+                objRadius = 2.5;
             }
             if (dist < radius + objRadius) {
                 return true;
