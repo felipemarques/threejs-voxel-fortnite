@@ -30,6 +30,7 @@ export class HUD {
         this.killCount = document.getElementById('kill-count');
         this.dropCount = document.getElementById('drop-count');
         this.distanceTraveled = document.getElementById('distance-traveled');
+        this.playerSpeed = document.getElementById('player-speed');
         this.memoryUsage = document.getElementById('memory-usage');
         this.targetInspect = document.getElementById('target-inspect');
 
@@ -110,9 +111,11 @@ export class HUD {
                         }
                     } catch (e) {}
                 };
+                // Ensure taps/clicks work on mobile; pointerdown is primary, click is fallback
                 slot.addEventListener('pointerdown', handle);
                 // also support touchstart for older browsers
                 slot.addEventListener('touchstart', handle, { passive: false });
+                slot.addEventListener('click', handle);
             });
         } catch (e) {}
     }
@@ -187,6 +190,16 @@ export class HUD {
         // Distance traveled (convert meters to kilometers)
         const distanceKm = (this.player.distanceTraveled / 1000).toFixed(2);
         if (this.distanceTraveled) this.distanceTraveled.innerText = distanceKm;
+        // Player speed (km/h). Use vehicle speed if driving; otherwise use velocity magnitude.
+        if (this.playerSpeed) {
+            let speed = 0;
+            if (this.player.isInVehicle) {
+                speed = Math.abs(this.player.vehicleSpeed) * 3.6;
+            } else if (this.player.velocity) {
+                speed = this.player.velocity.length() * 3.6;
+            }
+            this.playerSpeed.innerText = speed.toFixed(1);
+        }
 
         // Stats
         this.healthBar.style.width = `${this.player.health}%`;

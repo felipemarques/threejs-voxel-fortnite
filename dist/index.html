@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voxel Firecraft Prototype</title>
     <link rel="icon" type="image/png" href="/threejs-voxel-firecraft/dist/assets/favicon-BAg40dZS.png">
-  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/index-Bktd6pVv.js"></script>
-  <link rel="stylesheet" crossorigin href="/threejs-voxel-firecraft/dist/assets/index-BVUrVkjF.css">
+  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/index-zPoonJnH.js"></script>
+  <link rel="stylesheet" crossorigin href="/threejs-voxel-firecraft/dist/assets/index-kgK4vRNj.css">
 </head>
 <body>
     <div id="game-container"></div>
@@ -21,6 +21,54 @@
         <div id="hover-info" style="position:absolute; top:48%; left:50%; transform:translate(-50%, -100%); color:#fff; pointer-events:none; font-family:Arial; font-size:14px; text-shadow:0 0 6px rgba(0,0,0,0.8);"></div>
         <!-- Click selection info -->
         <div id="selection-info" class="hidden" aria-live="polite"></div>
+        <!-- Vehicle HUD -->
+        <div id="vehicle-hud" class="hidden" aria-label="Vehicle HUD">
+            <div class="vh-row">
+                <span>Speed</span><span id="vehicle-speed">0</span><span>km/h</span>
+            </div>
+            <div class="vh-row fuel-row">
+                <span>Fuel</span>
+                <div id="vehicle-fuel-bar"><div id="vehicle-fuel-fill"></div></div>
+                <span id="vehicle-fuel-text">100%</span>
+            </div>
+            <div class="vh-row">
+                <span>Distance</span><span id="vehicle-distance">0.00</span><span>km</span>
+            </div>
+            <div class="vh-row">
+                <span>Efficiency</span><span id="vehicle-efficiency">0.00</span><span>km/L</span>
+            </div>
+            <div class="vh-row">
+                <span>Range</span><span id="vehicle-range">0.0</span><span>km</span>
+            </div>
+        </div>
+        <!-- Studio palette -->
+        <div id="studio-palette" class="hidden" aria-label="Studio Palette">
+            <div class="palette-title">STUDIO TOOLS</div>
+            <div class="palette-grid">
+                <button id="studio-resume-btn" data-action="resume">Resume & Lock</button>
+                <button data-prefab="house">House</button>
+                <button data-prefab="mansion">Mansion</button>
+                <button data-prefab="cabin">Cabin</button>
+                <button data-prefab="smallBuilding">Small Building</button>
+                <button data-prefab="plateau">Plateau</button>
+                <button data-prefab="rock">Rock</button>
+                <div class="palette-submenu">
+                    <button data-prefab="tree" data-submenu="tree-menu">Tree ▾</button>
+                    <div id="tree-menu" class="submenu hidden">
+                        <button data-prefab="tree" data-tree-type="Oak">Oak</button>
+                        <button data-prefab="tree" data-tree-type="Pine">Pine</button>
+                    </div>
+                </div>
+                <div class="palette-submenu">
+                    <button data-prefab="vehicle" data-submenu="vehicle-menu">Vehicle ▾</button>
+                    <div id="vehicle-menu" class="submenu hidden">
+                        <button data-prefab="vehicle" data-vehicle-type="car">Car</button>
+                        <button data-prefab="vehicle" data-vehicle-type="truck">Truck</button>
+                    </div>
+                </div>
+                <button data-prefab="crate">Crate</button>
+            </div>
+        </div>
 
         <!-- Storm Timer -->
         <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>
@@ -37,17 +85,18 @@
         <div id="interaction-prompt" class="hidden">Press E to interact</div>
 
     <!-- Dashboard -->
-    <div id="dashboard" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
-        <div>FPS: <span id="fps-counter">0</span></div>
-        <div>Enemies: <span id="enemy-count">0</span></div>
-        <div>Killed: <span id="kill-count">0</span></div>
-        <div>Drops: <span id="drop-count">0</span></div>
-        <div>Distance: <span id="distance-traveled">0.00</span> km</div>
-        <div>Memory: <span id="memory-usage">0</span> MB</div>
-        <div id="target-inspect">Target: ---</div>
-        <div id="debug-info" style="display: none; color: #f1c40f; margin-top: 10px; border-top: 1px solid #555; padding-top: 5px;">
-            <div>Target: <span id="debug-target-name">None</span></div>
-            <div>ID: <span id="debug-target-id">---</span></div>
+        <div id="dashboard" style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
+            <div>FPS: <span id="fps-counter">0</span></div>
+            <div>Enemies: <span id="enemy-count">0</span></div>
+            <div>Killed: <span id="kill-count">0</span></div>
+            <div>Drops: <span id="drop-count">0</span></div>
+            <div>Distance: <span id="distance-traveled">0.00</span> km</div>
+            <div>Speed: <span id="player-speed">0.0</span> km/h</div>
+            <div>Memory: <span id="memory-usage">0</span> MB</div>
+            <div id="target-inspect">Target: ---</div>
+            <div id="debug-info" style="display: none; color: #f1c40f; margin-top: 10px; border-top: 1px solid #555; padding-top: 5px;">
+                <div>Target: <span id="debug-target-name">None</span></div>
+                <div>ID: <span id="debug-target-id">---</span></div>
         </div>
     </div>
         <div id="debug-container" style="position:absolute; top:0; left:0; pointer-events:none;"></div>

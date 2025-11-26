@@ -87,6 +87,11 @@ export class Player {
         // Let's stick to PointerLockControls but modify how we use the object.
         
         this.controls = new PointerLockControls(camera, document.body);
+        // Swallow noisy pointerlock errors on unsupported devices/browsers
+        document.addEventListener('pointerlockerror', (e) => {
+            try { e.stopImmediatePropagation(); } catch (err) {}
+            console.warn('Pointer lock request failed or unavailable in this environment.');
+        }, true);
         // Allow movement on mobile when touch controls are present
         this.allowTouchMovement = false;
 
@@ -144,7 +149,7 @@ export class Player {
         this.currentVehicle = null;
         this.vehicleSpeed = 0;
         this.vehicleBaseMaxSpeed = 70;
-        this.vehicleBoostMax = 45; // extra speed gained by sustained acceleration
+        this.vehicleBoostMax = 45; // extra speed gained by sustained acceleration (cars; trucks clamped separately)
         this.vehicleAccel = 70;
         this.vehicleTurnSpeed = 1.8;
         this.vehicleFriction = 2.8;
@@ -154,13 +159,22 @@ export class Player {
         this.vehicleFuel = 0;
         this.vehicleFuelCapacity = 0;
         this.vehicleDistance = 0;
+        this._vehicleFuelDistAccum = 0;
+        this.vehicleFuelUsed = 0;
+        this.vehicleEfficiencyKmPerL = 10;
+        this.vehicleIdleLph = 0.4;
+        this.vehicleThrottleLph = 0.8;
+        this._vehicleStateCache = null;
+        this.vehicleTurbo = false;
         this.vehicleHud = {
             root: document.getElementById('vehicle-hud'),
             speed: document.getElementById('vehicle-speed'),
             fuelBar: document.getElementById('vehicle-fuel-bar'),
             fuelFill: document.getElementById('vehicle-fuel-fill'),
             fuelText: document.getElementById('vehicle-fuel-text'),
-            distance: document.getElementById('vehicle-distance')
+            distance: document.getElementById('vehicle-distance'),
+            efficiency: document.getElementById('vehicle-efficiency'),
+            range: document.getElementById('vehicle-range')
         };
 
         // Studio selection state
@@ -572,8 +586,14 @@ export class Player {
                     break;
                 case 'ShiftLeft':
                 case 'ShiftRight':
-                    // start sprint input
-                    if (!this.isCrouching) this.isSprinting = true;
+                    // start sprint input (turbo in vehicle)
+                    if (!this.isCrouching) {
+                        if (this.isInVehicle) {
+                            this.vehicleTurbo = true;
+                        } else {
+                            this.isSprinting = true;
+                        }
+                    }
                     break;
                 case 'KeyV': this.toggleCameraMode(); break; // Toggle camera view
                 case 'KeyE':
@@ -607,6 +627,7 @@ export class Player {
                 case 'ShiftRight':
                     // stop sprint input
                     this.isSprinting = false;
+                    this.vehicleTurbo = false;
                     break;
             }
         };
@@ -1276,14 +1297,30 @@ export class Player {
             vehicle.rotation.y += Math.PI; // flip once so model faces travel direction
             vehicle.userData.hasFrontAligned = true;
         }
+        // Load persisted state for this vehicle
+        const state = this.loadVehicleState(vehicle);
         this.isInVehicle = true;
         this.vehicleAccelHold = 0;
+        this.isSprinting = false; // reset turbo when entering vehicle
+        this.vehicleTurbo = false;
         this.currentVehicle = vehicle;
         this.vehicleSpeed = 0;
         const vType = (vehicle.userData && vehicle.userData.vehicleType) || 'car';
-        this.vehicleFuelCapacity = vType === 'truck' ? 60 : 40; // liters
-        this.vehicleFuel = this.vehicleFuelCapacity;
-        this.vehicleDistance = 0;
+        this.vehicleFuelCapacity = state ? state.capacity : (vType === 'truck' ? 60 : 40); // liters
+        this.vehicleFuel = state ? state.fuel : this.vehicleFuelCapacity;
+        this.vehicleDistance = state ? state.distanceKm : 0;
+        this._vehicleFuelDistAccum = 0;
+        this.vehicleFuelUsed = state ? state.fuelUsed : 0;
+        // Tuned for noticeable HUD changes: thirstier baseline and higher idle/throttle burn
+        this.vehicleEfficiencyKmPerL = vType === 'truck' ? 3.5 : 5.5; // baseline cruise efficiency (more thirsty)
+        this.vehicleIdleLph = vType === 'truck' ? 1.0 : 0.7; // liters per hour at idle
+        this.vehicleThrottleLph = vType === 'truck' ? 2.8 : 1.9; // extra burn while holding throttle
+        // Per-type speed caps (m/s). Cars use base defaults; trucks are clamped lower.
+        this._vehicleMaxSpeed = vType === 'truck' ? 80 / 3.6 : null; // m/s cap
+        this._vehicleTurboMaxSpeed = vType === 'truck' ? 100 / 3.6 : null;
+        this._vehicleStateCache = state || null;
+        // Avoid distance spike on entry by syncing previousPosition to the vehicle
+        this.previousPosition.copy(vehicle.position);
         this.stopFootsteps();
         this.stopVehicleDriveSound();
         this.playVehicleDoor();
@@ -1323,6 +1360,9 @@ export class Player {
         this.currentVehicle = null;
         this.vehicleSpeed = 0;
         this.canJump = true;
+        this.previousPosition.copy(this.mesh.position);
+        // Persist vehicle state on exit
+        this.saveVehicleState(vehicle);
         this.updateVehicleHUD(false);
         if (this.vehiclePromptEl && this.vehiclePromptEl.dataset.vehiclePrompt === '1') {
             this.vehiclePromptEl.classList.add('hidden');
@@ -1373,19 +1413,24 @@ export class Player {
         } else {
             this.vehicleAccelHold = Math.max(0, this.vehicleAccelHold - dt * 0.6);
         }
-        const maxFwd = this.vehicleBaseMaxSpeed + this.vehicleBoostMax * this.vehicleAccelHold;
+        // Turbo: SHIFT while in vehicle
+        const turboActive = this.vehicleTurbo && accelInput > 0;
+        const turboMultiplier = turboActive ? (vType === 'truck' ? 1.25 : 1.6) : 1.0; // trucks mild, cars 60%
+        const accelBoost = turboActive ? (vType === 'truck' ? 1.15 : 1.35) : 1.0;
+        const maxFwd = (this.vehicleBaseMaxSpeed + this.vehicleBoostMax * this.vehicleAccelHold) * turboMultiplier;
         const maxBack = this.vehicleBaseMaxSpeed * 0.5;
         this.vehicleSpeed = Math.min(maxFwd, Math.max(-maxBack, this.vehicleSpeed));
+        this.vehicleSpeed += accelInput * this.vehicleAccel * dt * (accelBoost - 1); // extra shove from turbo
         this.vehicleSpeed *= Math.max(0, 1 - this.vehicleFriction * dt);
 
-        // Fuel consumption (only when moving)
-        if (Math.abs(this.vehicleSpeed) > 0.1) {
-            this.vehicleFuel = Math.max(0, this.vehicleFuel - (8 * dt));
-            if (this.vehicleFuel <= 0) {
-                this.vehicleSpeed = 0;
-            }
+        // Hard clamp truck speeds
+        if (this._vehicleMaxSpeed && !turboActive) {
+            this.vehicleSpeed = Math.min(this._vehicleMaxSpeed, this.vehicleSpeed);
+        } else if (this._vehicleTurboMaxSpeed && turboActive) {
+            this.vehicleSpeed = Math.min(this._vehicleTurboMaxSpeed, this.vehicleSpeed);
         }
 
+        const throttleHeld = accelInput > 0;
         const turnDir = (this.vehicleSpeed >= 0 ? 1 : -1);
         if (this.moveLeft) vehicle.rotation.y += this.vehicleTurnSpeed * dt * turnDir;
         if (this.moveRight) vehicle.rotation.y -= this.vehicleTurnSpeed * dt * turnDir;
@@ -1423,18 +1468,34 @@ export class Player {
         const movedDist = vehicle.position.distanceTo(prevPos);
         this.rotateVehicleWheels(vehicle, movedDist);
 
-        // Fuel consumption based on distance (liters per meter)
-        if (movedDist > 0) {
-            const type = (vehicle.userData && vehicle.userData.vehicleType) || 'car';
-            const efficiencyKmPerL = type === 'truck' ? 6 : 10; // trucks: 6 km/L, cars: 10 km/L
-            const kmMoved = movedDist / 1000; // world units treated as meters
-            const fuelUsed = kmMoved / efficiencyKmPerL;
-            this.vehicleFuel = Math.max(0, this.vehicleFuel - fuelUsed);
-            if (this.vehicleFuel <= 0) {
-                this.vehicleSpeed = 0;
-            }
-            this.vehicleDistance += kmMoved;
+        // Fuel consumption combining idle, throttle, distance traveled, and turbo penalty
+        let fuelUsed = 0;
+        // Idle burn (engine running even if stopped)
+        fuelUsed += (this.vehicleIdleLph / 3600) * dt;
+
+        // Throttle burn (holding accelerate injects more fuel even if not yet moving)
+        if (throttleHeld) {
+            fuelUsed += (this.vehicleThrottleLph / 3600) * dt * (turboActive ? 1.7 : 1.0);
         }
+
+        // Distance-based burn (km / efficiency) with small acceleration penalty
+        if (movedDist > 0) {
+            const kmMoved = movedDist / 1000; // world units treated as meters
+            this.vehicleDistance += kmMoved;
+            const baseFuel = kmMoved / this.vehicleEfficiencyKmPerL;
+            const accelPenalty = throttleHeld ? baseFuel * 0.35 * (turboActive ? 1.35 : 1.0) : 0;
+            fuelUsed += baseFuel + accelPenalty;
+        }
+
+        // Apply fuel usage
+        this.vehicleFuelUsed += fuelUsed;
+        this.vehicleFuel = Math.max(0, this.vehicleFuel - fuelUsed);
+        if (this.vehicleFuel <= 0) {
+            this.vehicleSpeed = 0;
+        }
+
+        // Persist state for shared vehicle usage
+        this.saveVehicleState(vehicle);
 
         // Update vehicle HUD display
         this.updateVehicleHUD(true);
@@ -1494,11 +1555,62 @@ export class Player {
         if (this.vehicleHud.fuelText) {
             const capacity = this.vehicleFuelCapacity || 1;
             const pct = Math.max(0, Math.min(100, (this.vehicleFuel / capacity) * 100));
-            this.vehicleHud.fuelText.innerText = `${pct.toFixed(0)}%`;
+            this.vehicleHud.fuelText.innerText = `${this.vehicleFuel.toFixed(1)}L (${pct.toFixed(1)}%)`;
         }
         if (this.vehicleHud.distance) {
-            this.vehicleHud.distance.innerText = this.vehicleDistance.toFixed(1);
+            this.vehicleHud.distance.innerText = this.vehicleDistance.toFixed(2);
         }
+        if (this.vehicleHud.efficiency) {
+            const eff = (this.vehicleFuelUsed > 0 && this.vehicleDistance > 0)
+                ? (this.vehicleDistance / this.vehicleFuelUsed)
+                : 0;
+            this.vehicleHud.efficiency.innerText = eff.toFixed(2);
+        }
+        if (this.vehicleHud.range) {
+            const rangeKm = this.vehicleFuel * this.vehicleEfficiencyKmPerL;
+            this.vehicleHud.range.innerText = rangeKm.toFixed(1);
+        }
+    }
+
+    getVehicleStorageKey(vehicle) {
+        if (!vehicle || !vehicle.userData || !vehicle.userData.gameId) return null;
+        return `vehicle-state-${vehicle.userData.gameId}`;
+    }
+
+    loadVehicleState(vehicle) {
+        try {
+            if (vehicle && vehicle.userData && vehicle.userData.vehicleState) {
+                return vehicle.userData.vehicleState;
+            }
+            const key = this.getVehicleStorageKey(vehicle);
+            if (!key || typeof localStorage === 'undefined') return null;
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            vehicle.userData.vehicleState = data;
+            return data;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    saveVehicleState(vehicle) {
+        if (!vehicle) return;
+        const key = this.getVehicleStorageKey(vehicle);
+        if (!key) return;
+        const state = {
+            fuel: this.vehicleFuel,
+            capacity: this.vehicleFuelCapacity,
+            distanceKm: this.vehicleDistance,
+            fuelUsed: this.vehicleFuelUsed,
+            vehicleType: (vehicle.userData && vehicle.userData.vehicleType) || 'car'
+        };
+        vehicle.userData.vehicleState = state;
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(key, JSON.stringify(state));
+            }
+        } catch (e) {}
     }
 
     selectStudioObject(event) {
@@ -1992,10 +2104,15 @@ export class Player {
                 if (this.audioCtx.state === 'suspended') {
                     this.audioCtx.resume();
                 }
+                // Clean up any stray instance before starting a new one
                 if (this._footstepsSource) {
-                    const rate = this.isSprinting ? 1.4 : (this.isCrouching ? 0.8 : 1.0);
-                    this._footstepsSource.playbackRate.value = rate;
-                    return;
+                    try { this._footstepsSource.stop(); } catch (e) {}
+                    try { this._footstepsSource.disconnect(); } catch (e) {}
+                    if (this._footstepsGain) {
+                        try { this._footstepsGain.disconnect(); } catch (e) {}
+                    }
+                    this._footstepsSource = null;
+                    this._footstepsGain = null;
                 }
                 const src = this.audioCtx.createBufferSource();
                 src.buffer = this.footstepsBuffer;
@@ -2023,6 +2140,7 @@ export class Player {
     stopFootsteps() {
         this._lastFootstepsActive = false;
         if (this._footstepsSource) {
+            try { this._footstepsSource.onended = null; } catch (e) {}
             try { this._footstepsSource.stop(); } catch (e) {}
             try { this._footstepsSource.disconnect(); } catch (e) {}
         }
@@ -2040,17 +2158,25 @@ export class Player {
 
     getSurfaceHeight(x, z) {
         let surface = (this.world && typeof this.world.getHeightAt === 'function') ? this.world.getHeightAt(x, z) : 0;
-        if (this.world && this.world.objects && this.world.objects.length > 0) {
-            this.world.objects.forEach(obj => {
-                if (obj.userData && obj.userData.type === 'block') {
-                    const size = obj.userData.size || this.blockSize;
-                    if (Math.abs(obj.position.x - x) < size * 0.6 && Math.abs(obj.position.z - z) < size * 0.6) {
-                        const top = obj.position.y + size / 2;
-                        if (top > surface) surface = top;
-                    }
+        const objs = (this.world && this.world.objects) ? this.world.objects : [];
+        objs.forEach(obj => {
+            if (!obj || !obj.userData) return;
+            // Blocks (legacy)
+            if (obj.userData.type === 'block') {
+                const size = obj.userData.size || this.blockSize;
+                if (Math.abs(obj.position.x - x) < size * 0.6 && Math.abs(obj.position.z - z) < size * 0.6) {
+                    const top = obj.position.y + size / 2;
+                    if (top > surface) surface = top;
                 }
-            });
-        }
+            }
+            // Collider boxes (rocks/structures)
+            if (obj.userData.colliderBox) {
+                const box = obj.userData.colliderBox;
+                if (x >= box.min.x && x <= box.max.x && z >= box.min.z && z <= box.max.z) {
+                    if (box.max.y > surface) surface = box.max.y;
+                }
+            }
+        });
         return surface;
     }
 
@@ -2236,15 +2362,9 @@ export class Player {
 
     checkCollision(direction, distance) {
         const raycaster = new THREE.Raycaster();
-        // Ray origin at player center (waist height)
-        const origin = this.mesh.position.clone();
-        origin.y += 1.0; 
-        
-        raycaster.set(origin, direction);
-        
-        // Buffer distance (player radius approx 0.4)
-        const buffer = 0.5;
-        
+        const buffer = 0.5; // player radius
+        const origins = [1.6, 1.0, 0.35]; // head/waist/feet
+
         // Check collision with world objects and enemies
         let obstacles = this.worldObjects || [];
         if (this.enemyManager && this.enemyManager.enemies) {
@@ -2252,11 +2372,40 @@ export class Player {
             obstacles = obstacles.concat(enemyMeshes);
         }
 
-        if (obstacles.length > 0) {
-            const intersects = raycaster.intersectObjects(obstacles, true); // recursive
-            if (intersects.length > 0) {
-                if (intersects[0].distance < distance + buffer) {
-                    return true;
+        const climbHeight = 1.5;
+        const findColliderBox = (obj) => {
+            let cur = obj;
+            while (cur) {
+                if (cur.userData && cur.userData.colliderBox) return cur.userData.colliderBox;
+                cur = cur.parent;
+            }
+            return null;
+        };
+
+        for (const h of origins) {
+            const origin = this.mesh.position.clone();
+            origin.y += h;
+            raycaster.set(origin, direction);
+
+            if (obstacles.length > 0) {
+                const intersects = raycaster.intersectObjects(obstacles, true);
+                if (intersects.length > 0) {
+                    const hit = intersects[0];
+                    if (hit.distance < distance + buffer) {
+                        const box = findColliderBox(hit.object);
+                        if (box) {
+                            const top = box.max.y;
+                            const heightDiff = top - this.mesh.position.y;
+                            // Allow stepping/climbing small heights (rocks)
+                            if (heightDiff <= climbHeight && heightDiff > -0.5) {
+                                this.mesh.position.y = top;
+                                this.velocity.y = 0;
+                                this.canJump = true;
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
                 }
             }
         }

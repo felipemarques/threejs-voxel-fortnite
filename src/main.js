@@ -207,10 +207,8 @@ class Game {
                 playBtn.innerText = 'PLAY GAME';
                 
                 // Lock pointer again
-                if (this.player.controls) {
-                    try {
-                        this.player.controls.lock();
-                    } catch (e) {}
+                if (this.player) {
+                    try { this.player.lockControls(); } catch (e) {}
                 }
                 
                 // Apply updated settings to HUD if present
@@ -346,7 +344,7 @@ class Game {
                 const menuVisible = document.getElementById('main-menu') && document.getElementById('main-menu').style.display !== 'none';
                 const isStudio = this.player && this.player.gameMode === 'studio';
                 if (this.isPaused || menuVisible || isStudio) return;
-                if (this.player && this.player.controls && !this.player.controls.isLocked && !this.player.isDead) {
+                if (this.player && !this.player.isDead) {
                     this.player.lockControls();
                 }
             } catch (e) { console.warn('Pointer lock request skipped or failed:', e); }
@@ -389,7 +387,8 @@ class Game {
         palette.classList.toggle('hidden', !isStudio);
         if (!isStudio) return;
 
-        const buttons = palette.querySelectorAll('button[data-prefab]');
+        // Bind all palette buttons (prefab + resume)
+        const buttons = palette.querySelectorAll('button');
         buttons.forEach(btn => {
             if (btn._boundStudio) return;
             btn._boundStudio = true;
@@ -398,11 +397,23 @@ class Game {
                 const action = btn.getAttribute('data-action');
                 if (action === 'resume') {
                     this.isPaused = false;
+                    if (this.player && this.player.controls) {
+                        this.player.controls.enabled = true;
+                    }
                     if (this.player && this.player.controls && !this.player.controls.isLocked) {
                         try { this.player.controls.lock(); } catch (e) {}
                     }
                     const menu = document.getElementById('main-menu');
                     if (menu) menu.style.display = 'none';
+                    // Hide the palette so clicks go back to the game canvas
+                    try { palette.classList.add('hidden'); } catch (e) {}
+                    // Clear any pending studio placement so clicks won't place until ESC is pressed again
+                    this.studioSelectedPrefab = null;
+                    this.studioSelectedOptions = null;
+                    if (this.player && this.player.studioSelectionHelper) {
+                        try { this.player.scene.remove(this.player.studioSelectionHelper); } catch (e) {}
+                        this.player.studioSelectionHelper = null;
+                    }
                     if (this.bgAudio && this.bgAudio.paused) this.playBackgroundMusic();
                     return;
                 }
@@ -579,6 +590,12 @@ class Game {
                 playBtn.innerText = 'RESUME GAME';
             }
         }
+
+        // Reopen studio palette when pausing in studio mode so the user must press ESC to re-arm building
+        if (this.player && this.player.gameMode === 'studio') {
+            const palette = document.getElementById('studio-palette');
+            if (palette) palette.classList.remove('hidden');
+        }
     }
 
     // Background music control
@@ -636,7 +653,8 @@ class Game {
         // Allow updates when PointerLock is active OR when touch controls are present (mobile)
         const touchActive = !!(this.touchControls && this.touchControls.enabled);
         const pointerLocked = !!(this.player && this.player.controls && this.player.controls.isLocked);
-        if (!this.isPaused && this.player && (pointerLocked || touchActive)) {
+        const isStudio = !!(this.player && this.player.gameMode === 'studio');
+        if (!this.isPaused && this.player && (pointerLocked || touchActive || isStudio)) {
             // Execute updates with guarded logging to catch where errors originate
             try {
                 this.player.update(cappedDt);

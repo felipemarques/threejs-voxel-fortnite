@@ -187,6 +187,7 @@ html {
     left: 20px;
     display: flex;
     flex-direction: column;
+    z-index: 50;
 }
 
 .bar-container {
@@ -270,6 +271,7 @@ html {
     display: flex;
     gap: 10px;
     pointer-events: auto;
+    z-index: 300;
 }
 
 .slot {
@@ -371,15 +373,15 @@ html {
 
 #studio-resume-btn {
     grid-column: span 2;
-    background: linear-gradient(135deg, #00d8ff, #0077b6);
+    background: linear-gradient(135deg, #2ecc71, #27ae60) !important;
     border-color: rgba(255,255,255,0.3);
     font-weight: 800;
 }
 
 #vehicle-hud {
     position: absolute;
-    top: 20px;
-    right: 220px;
+    top: 210px; /* below player stats, above float */
+    left: 10px;
     background: rgba(0, 0, 0, 0.7);
     padding: 10px 12px;
     border-radius: 10px;
@@ -389,7 +391,7 @@ html {
     box-shadow: 0 6px 18px rgba(0,0,0,0.4);
     border: 1px solid rgba(255,255,255,0.12);
     pointer-events: none;
-    z-index: 180;
+    z-index: 200; /* above float button */
 }
 
 #vehicle-hud.hidden {
@@ -933,8 +935,8 @@ html {
 }
 #float-btn {
     position: absolute;
-    top: 150px; /* just below the dashboard in the top-left */
-    left: 10px;
+    bottom: 180px; /* above player energy bars */
+    left: 20px;
     width: 200px;
     padding: 10px 14px;
     border-radius: 10px;
@@ -943,7 +945,7 @@ html {
     font-weight: 800;
     border: 1px solid rgba(0,0,0,0.2);
     cursor: pointer;
-    z-index: 150;
+    z-index: 190;
     pointer-events: auto;
     box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     letter-spacing: 0.5px;

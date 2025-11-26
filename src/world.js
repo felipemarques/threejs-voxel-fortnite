@@ -354,7 +354,7 @@ export class World {
         this.objects.push(ground);
 
         // Voxel clouds (visual only, not part of collision objects)
-        const cloudCount = 6;
+        const cloudCount = 12;
         for (let i = 0; i < cloudCount; i++) {
             const x = (Math.random() - 0.5) * this.mapSize * 0.6;
             const z = (Math.random() - 0.5) * this.mapSize * 0.6;
@@ -547,6 +547,7 @@ export class World {
             rock.add(moss);
         }
 
+        this._tagStaticCollider(rock, 'rock');
         return rock;
     }
 
@@ -560,6 +561,7 @@ export class World {
         mesh.position.set(x, baseY + height / 2, z);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        this._tagStaticCollider(mesh, 'rock');
         return mesh;
     }
 
@@ -574,6 +576,7 @@ export class World {
         mesh.rotation.y = Math.random() * Math.PI;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        this._tagStaticCollider(mesh, 'rock');
         return mesh;
     }
 
@@ -603,6 +606,7 @@ export class World {
         group.add(top);
         group.position.set(x, baseY, z);
         group.traverse(o => { o.castShadow = true; o.receiveShadow = true; });
+        this._tagStaticCollider(group, 'rock');
         return group;
     }
 
@@ -620,6 +624,7 @@ export class World {
             group.add(c);
         }
         group.position.set(x, baseY, z);
+        this._tagStaticCollider(group, 'rock');
         return group;
     }
 
@@ -1210,6 +1215,16 @@ export class World {
     _buildHeightFn() {
         // Flat height map to keep navigation stable
         return () => 0;
+    }
+
+    _tagStaticCollider(obj, type = null) {
+        if (!obj) return;
+        obj.updateWorldMatrix(true, true);
+        const box = new THREE.Box3().setFromObject(obj);
+        obj.userData = obj.userData || {};
+        if (type && !obj.userData.type) obj.userData.type = type;
+        obj.userData.colliderBox = box;
+        obj.userData.colliderType = 'solid';
     }
 
     getHeightAt(x, z) {
