@@ -86,6 +86,14 @@ class Game {
             if (e.code === 'Escape') {
                 this.togglePause();
             }
+            // Studio shortcuts
+            if (this.player && this.player.gameMode === 'studio') {
+                if (e.code === 'KeyL') {
+                    try { this.spawnStudioDrops(); } catch (err) { console.warn('Studio drop failed:', err); }
+                } else if (e.code === 'KeyH') {
+                    this.toggleHotkeyModal(true);
+                }
+            }
         });
 
         // Setup Menu
@@ -96,6 +104,25 @@ class Game {
             ev.preventDefault && ev.preventDefault();
             console.warn('Pointer lock request failed or was cancelled.');
         });
+    }
+
+    spawnStudioDrops() {
+        if (!this.itemManager || !this.player || this.player.gameMode !== 'studio') return;
+        try {
+            // Drop a small batch near player
+            for (let i = 0; i < 3; i++) {
+                this.itemManager.spawnMatrixDropNearPlayer();
+            }
+        } catch (e) {
+            console.warn('spawnStudioDrops error:', e);
+        }
+    }
+
+    toggleHotkeyModal(show) {
+        const modal = document.getElementById('hotkey-modal');
+        if (!modal) return;
+        modal.classList.toggle('hidden', !show);
+        modal.setAttribute('aria-hidden', show ? 'false' : 'true');
     }
 
     updateDebugToggleVisibility(enabled) {
@@ -125,6 +152,9 @@ class Game {
         const gameModeSelect = document.getElementById('setting-game-mode');
         const quitBtn = document.getElementById('quit-btn');
         const floatBtn = document.getElementById('float-btn');
+        const hotkeyHint = document.getElementById('hotkey-hint');
+        const hotkeyModal = document.getElementById('hotkey-modal');
+        const hotkeyClose = document.getElementById('hotkey-modal-close');
         
         const enemiesVal = document.getElementById('enemy-count-val');
         const stormVal = document.getElementById('storm-time-val');
@@ -220,6 +250,12 @@ class Game {
                 playBtn.innerText = 'PLAY GAME';
                 this.startGame(settings);
             }
+
+            // Show hotkey hint in studio mode
+            if (hotkeyHint) {
+                const showHotkeys = settings && settings.gameMode === 'studio';
+                hotkeyHint.classList.toggle('hidden', !showHotkeys);
+            }
         };
 
         if (quitBtn) {
@@ -232,6 +268,19 @@ class Game {
         }
 
         if (floatBtn) floatBtn.classList.add('hidden');
+
+        // Hotkey modal handlers
+        if (hotkeyHint) {
+            hotkeyHint.onclick = () => this.toggleHotkeyModal(true);
+        }
+        if (hotkeyClose) {
+            hotkeyClose.onclick = () => this.toggleHotkeyModal(false);
+        }
+        if (hotkeyModal) {
+            hotkeyModal.addEventListener('click', (ev) => {
+                if (ev.target === hotkeyModal) this.toggleHotkeyModal(false);
+            });
+        }
 
         // Volume slider live update
         if (volumeSlider) {

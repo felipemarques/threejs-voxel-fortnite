@@ -193,10 +193,10 @@ export class HUD {
         // Player speed (km/h). Use vehicle speed if driving; otherwise use velocity magnitude.
         if (this.playerSpeed) {
             let speed = 0;
-            if (this.player.isInVehicle) {
-                speed = Math.abs(this.player.vehicleSpeed) * 3.6;
-            } else if (this.player.velocity) {
-                speed = this.player.velocity.length() * 3.6;
+            if (this.player.isInVehicle && typeof this.player.currentSpeed === 'number') {
+                speed = this.player.currentSpeed * 3.6;
+            } else if (typeof this.player.currentSpeed === 'number') {
+                speed = this.player.currentSpeed * 3.6;
             }
             this.playerSpeed.innerText = speed.toFixed(1);
         }

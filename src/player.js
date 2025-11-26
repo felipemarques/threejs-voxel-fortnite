@@ -45,7 +45,7 @@ export class Player {
         this.moveRight = false;
         this.isSprinting = false;
         this.canJump = false;
-        this.speed = 100.0;
+        this.speed = 42.0; // base walking speed (~15 km/h)
         this.jumpHeight = 30.0;
         this.gravity = 250.0;
 
@@ -166,6 +166,7 @@ export class Player {
         this.vehicleThrottleLph = 0.8;
         this._vehicleStateCache = null;
         this.vehicleTurbo = false;
+        this.currentSpeed = 0; // m/s snapshot for HUD
         this.vehicleHud = {
             root: document.getElementById('vehicle-hud'),
             speed: document.getElementById('vehicle-speed'),
@@ -1090,7 +1091,7 @@ export class Player {
             // Apply speed with Collision Detection
             const moving = moveVec.length() > 0;
             let sprintMultiplier = 1.0;
-            if (this.isSprinting && !this.isCrouching && moving && this.stamina > 0) sprintMultiplier = 1.9; // ~double speed
+            if (this.isSprinting && !this.isCrouching && moving && this.stamina > 0) sprintMultiplier = 2.0; // ~30 km/h sprint with current base speed
             const moveSpeed = this.speed * dt * 0.1 * sprintMultiplier;
             const velocityVec = moveVec.multiplyScalar(moveSpeed);
 
@@ -1168,11 +1169,12 @@ export class Player {
             }
 
             // Track distance traveled
-            if (this.previousPosition.length() > 0) {
-                const distance = this.mesh.position.distanceTo(this.previousPosition);
-                this.distanceTraveled += distance;
-            }
-            this.previousPosition.copy(this.mesh.position);
+        if (this.previousPosition.length() > 0) {
+            const distance = this.mesh.position.distanceTo(this.previousPosition);
+            this.distanceTraveled += distance;
+            if (dt > 0) this.currentSpeed = distance / dt; // m/s
+        }
+        this.previousPosition.copy(this.mesh.position);
 
             // Handle stamina drain/recovery
             if (this.isSprinting && !this.isCrouching && moving && this.stamina > 0) {
@@ -1305,6 +1307,7 @@ export class Player {
         this.vehicleTurbo = false;
         this.currentVehicle = vehicle;
         this.vehicleSpeed = 0;
+        this.currentSpeed = 0;
         const vType = (vehicle.userData && vehicle.userData.vehicleType) || 'car';
         this.vehicleFuelCapacity = state ? state.capacity : (vType === 'truck' ? 60 : 40); // liters
         this.vehicleFuel = state ? state.fuel : this.vehicleFuelCapacity;
@@ -1399,6 +1402,7 @@ export class Player {
             this.vehicleSpeed = 0;
             this.mesh.position.copy(vehicle.position);
             this.previousPosition.copy(vehicle.position);
+            this.currentSpeed = 0;
             this.updateVehicleHUD(true);
             return;
         }
@@ -1429,6 +1433,8 @@ export class Player {
         } else if (this._vehicleTurboMaxSpeed && turboActive) {
             this.vehicleSpeed = Math.min(this._vehicleTurboMaxSpeed, this.vehicleSpeed);
         }
+
+        this.currentSpeed = Math.abs(this.vehicleSpeed);
 
         const throttleHeld = accelInput > 0;
         const turnDir = (this.vehicleSpeed >= 0 ? 1 : -1);
