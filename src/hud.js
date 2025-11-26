@@ -557,6 +557,26 @@ export class HUD {
             });
         }
 
+        // Houses/buildings
+        const houses = (this.world && Array.isArray(this.world.objects))
+            ? this.world.objects.filter(o => o && o.userData && o.userData.type === 'house')
+            : [];
+        if (houses.length) {
+            ctx.fillStyle = '#ffd166';
+            ctx.strokeStyle = '#8c5a00';
+            ctx.lineWidth = 1;
+            houses.forEach(h => {
+                const pos = h.position;
+                if (!pos) return;
+                const hx = Math.max(cx - radius, Math.min(cx + radius, cx + (pos.x / half) * radius));
+                const hz = Math.max(cz - radius, Math.min(cz + radius, cz - (pos.z / half) * radius));
+                ctx.beginPath();
+                ctx.arc(hx, hz, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+        }
+
         // Player dot
         const px = Math.max(cx - radius, Math.min(cx + radius, cx + (this.player.position.x / half) * radius));
         const pz = Math.max(cz - radius, Math.min(cz + radius, cz - (this.player.position.z / half) * radius));

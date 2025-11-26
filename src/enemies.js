@@ -54,8 +54,8 @@ export class EnemyManager {
         } catch(e) {}
     }
 
-    spawnEnemy() {
-        if (this.gameMode === 'matrix' || this.gameMode === 'studio') return;
+    spawnEnemy(force = false) {
+        if (!force && (this.gameMode === 'matrix' || this.gameMode === 'studio')) return;
         const spawnSpan = (this.world && this.world.halfMapSize) ? this.world.halfMapSize : 100;
         const x = (Math.random() - 0.5) * spawnSpan;
         const z = (Math.random() - 0.5) * spawnSpan;

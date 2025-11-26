@@ -468,6 +468,11 @@ class Game {
                     }
                     if (this.bgAudio && this.bgAudio.paused) this.playBackgroundMusic();
                     return;
+                } else if (action === 'spawn-npc') {
+                    if (this.enemyManager && typeof this.enemyManager.spawnEnemy === 'function') {
+                        this.enemyManager.spawnEnemy(true);
+                    }
+                    return;
                 }
                 const prefab = btn.getAttribute('data-prefab');
                 const vehicleType = btn.getAttribute('data-vehicle-type');
@@ -602,6 +607,8 @@ class Game {
                     palette.style.bottom = 'auto';
                     palette.style.position = 'fixed';
                     palette.style.width = `${rectCache.width}px`; // keep size while moving
+                    // lock height as well to prevent stretching
+                    palette.style.height = `${rectCache.height}px`;
                     palette.style.left = `${rectCache.left}px`;
                     palette.style.top = `${rectCache.top}px`;
                 }
