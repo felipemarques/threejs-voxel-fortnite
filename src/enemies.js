@@ -160,10 +160,32 @@ class Bot {
         const skinMat = new THREE.MeshStandardMaterial({ color: 0x8e44ad }); // Purple enemy (Zombie-like)
         const clothesMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
 
-        // Head
+        // Head + face details
         const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skinMat);
         head.position.y = 1.75;
         this.mesh.add(head);
+        // Eyes (glowing)
+        const eyeMat = new THREE.MeshStandardMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8, roughness: 0.2 });
+        const eyeGeo = new THREE.BoxGeometry(0.12, 0.08, 0.02);
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-0.12, 0.05, 0.26);
+        const rightEye = leftEye.clone();
+        rightEye.position.x = 0.12;
+        head.add(leftEye);
+        head.add(rightEye);
+        // Mouth (jagged)
+        const mouthMat = new THREE.MeshStandardMaterial({ color: 0x0d0d0d, emissive: 0x330000, emissiveIntensity: 0.4 });
+        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.04), mouthMat);
+        mouth.position.set(0, -0.14, 0.25);
+        head.add(mouth);
+        // Teeth accents
+        const toothMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.3 });
+        const toothGeo = new THREE.BoxGeometry(0.05, 0.06, 0.02);
+        for (let i = -1; i <= 1; i += 2) {
+            const tooth = new THREE.Mesh(toothGeo, toothMat);
+            tooth.position.set(i * 0.06, -0.05, 0.04);
+            mouth.add(tooth);
+        }
 
         // Body
         const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), clothesMat);

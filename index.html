@@ -25,7 +25,6 @@
         <div id="crosshair"></div>
         <!-- Sniper Scope Overlay -->
         <div id="scope-overlay" class="hidden"></div>
-        <button id="float-btn" class="hidden">FLOAT</button>
         <!-- Hover info above crosshair -->
         <div id="hover-info" style="position:absolute; top:48%; left:50%; transform:translate(-50%, -100%); color:#fff; pointer-events:none; font-family:Arial; font-size:14px; text-shadow:0 0 6px rgba(0,0,0,0.8);"></div>
         <!-- Click selection info -->
@@ -50,6 +49,7 @@
                 <span>Range</span><span id="vehicle-range">0.0</span><span>km</span>
             </div>
         </div>
+        <!-- Studio palette (global, not tied to main menu) -->
         <!-- Storm Timer -->
         <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>
         <!-- Minimap -->
@@ -225,15 +225,16 @@
     <script type="module" src="/src/main.js"></script>
 
     <!-- Studio palette (global, not tied to touch controls) -->
-    <div id="studio-palette" class="hidden" aria-label="Studio Palette">
-        <div class="palette-title">STUDIO TOOLS</div>
-        <div class="palette-grid">
-            <button id="studio-resume-btn" data-action="resume">Resume & Lock</button>
-            <button data-prefab="house">House</button>
-            <button data-prefab="mansion">Mansion</button>
-            <button data-prefab="cabin">Cabin</button>
-            <button data-prefab="smallBuilding">Small Building</button>
-            <button data-prefab="plateau">Plateau</button>
+        <div id="studio-palette" class="hidden" aria-label="Studio Palette">
+            <div class="palette-title">STUDIO TOOLS</div>
+            <div class="palette-grid">
+                <button id="studio-resume-btn" data-action="resume">Resume & Lock</button>
+                <button id="float-btn" data-action="float-toggle">FLOAT</button>
+                <button data-prefab="house">House</button>
+                <button data-prefab="mansion">Mansion</button>
+                <button data-prefab="cabin">Cabin</button>
+                <button data-prefab="smallBuilding">Small Building</button>
+                <button data-prefab="plateau">Plateau</button>
             <button data-prefab="rock">Rock</button>
             <div class="palette-submenu">
                 <button data-prefab="tree" data-submenu="tree-menu">Tree ▾</button>
@@ -242,17 +243,20 @@
                     <button data-prefab="tree" data-tree-type="Pine">Pine</button>
                 </div>
             </div>
-            <div class="palette-submenu">
-                <button data-prefab="vehicle" data-submenu="vehicle-menu">Vehicle ▾</button>
-                <div id="vehicle-menu" class="submenu hidden">
-                    <button data-prefab="vehicle" data-vehicle-type="car">Car</button>
-                    <button data-prefab="vehicle" data-vehicle-type="truck">Truck</button>
+                <div class="palette-submenu">
+                    <button data-prefab="vehicle" data-submenu="vehicle-menu">Vehicle ▾</button>
+                    <div id="vehicle-menu" class="submenu hidden">
+                        <button data-prefab="vehicle" data-vehicle-type="car">Car</button>
+                        <button data-prefab="vehicle" data-vehicle-type="truck">Truck</button>
+                    </div>
                 </div>
+                <button data-prefab="crate">Crate</button>
+                <button data-action="spawn-npc">Add NPC</button>
+                <button data-action="drops">Rain Loot (L)</button>
+                <button data-action="menu">Menu</button>
+                <button data-action="quit">Quit Game</button>
             </div>
-            <button data-prefab="crate">Crate</button>
-            <button data-action="spawn-npc">Add NPC</button>
         </div>
-    </div>
 
     <!-- Hotbar (always visible for desktop/mobile) -->
     <div id="hotbar">
@@ -275,6 +279,8 @@
             <ul style="list-style: none; padding-left: 0; margin: 0;">
                 <li><strong>H</strong> — abrir/fechar esta ajuda</li>
                 <li><strong>L</strong> — fazer cair loots/drops do céu perto do jogador</li>
+                <li><strong>B</strong> — colocar bloco na mira</li>
+                <li><strong>X</strong> — remover bloco selecionado (ou o último)</li>
                 <li><strong>ESC</strong> — mostrar menu/paleta de construção</li>
                 <li><strong>V</strong> — alternar câmera</li>
             </ul>

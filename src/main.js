@@ -74,7 +74,7 @@ class Game {
         this._objectClickHandler = null;
         this._objectClickTarget = null;
         this._longPressTimer = null;
-        this._boundUnlockHandler = null;
+        this.hotkeyModalVisible = false;
         // Pause state
         this.isPaused = false;
         this.pauseMenu = document.getElementById('pause-menu');
@@ -93,7 +93,7 @@ class Game {
                 if (e.code === 'KeyL') {
                     try { this.spawnStudioDrops(); } catch (err) { console.warn('Studio drop failed:', err); }
                 } else if (e.code === 'KeyH') {
-                    this.toggleHotkeyModal(true);
+                    this.toggleHotkeyModal(!this.hotkeyModalVisible);
                 }
             }
         });
@@ -126,6 +126,7 @@ class Game {
         if (!modal) return;
         modal.classList.toggle('hidden', !show);
         modal.setAttribute('aria-hidden', show ? 'false' : 'true');
+        this.hotkeyModalVisible = show;
     }
 
     toggleTouchLookArea(show) {
@@ -248,7 +249,6 @@ class Game {
             
             // Hide Menu
             menu.style.display = 'none';
-            this.isPaused = false;
             // Start background music (user gesture) if enabled
             if (settings.musicEnabled !== false) {
                 this.playBackgroundMusic();
@@ -275,12 +275,10 @@ class Game {
                     this.hud.settings = settings;
                 }
                 this.setHotbarVisible(true);
-                this.refreshStudioPaletteVisibility();
             } else {
                 // Start new game
                 playBtn.innerText = 'PLAY GAME';
                 this.startGame(settings);
-                this.refreshStudioPaletteVisibility();
             }
 
             // Show hotkey hint in studio mode
@@ -313,9 +311,6 @@ class Game {
                 if (ev.target === hotkeyModal) this.toggleHotkeyModal(false);
             });
         }
-
-        // Ensure studio palette hidden until a studio game is running
-        this.refreshStudioPaletteVisibility();
 
         // Volume slider live update
         if (volumeSlider) {
@@ -395,18 +390,6 @@ class Game {
         this.setupObjectInspector();
         // Hide DBG button when debug mode is off
         this.updateDebugToggleVisibility(!!settings.debugMode);
-        // Pointer unlock should open pause menu immediately (avoids double ESC)
-        if (this.player && this.player.controls) {
-            const handler = () => {
-                if (this.isPaused) return;
-                this.showPauseMenu();
-            };
-            if (this._boundUnlockHandler) {
-                try { this.player.controls.removeEventListener('unlock', this._boundUnlockHandler); } catch (e) {}
-            }
-            this._boundUnlockHandler = handler;
-            this.player.controls.addEventListener('unlock', handler);
-        }
         // Show hotbar in-game
         this.setHotbarVisible(true);
 
@@ -473,7 +456,6 @@ class Game {
 
         // Studio palette
         this.setupStudioPalette(effectiveSettings);
-        this.refreshStudioPaletteVisibility();
 
         // Lock pointer immediately after Play click (desktop)
         if (!IS_MOBILE && this.player && this.player.controls && !this.player.controls.isLocked) {
@@ -540,12 +522,13 @@ class Game {
                 if (action === 'resume') {
                     this.isPaused = false;
                     if (this.player && this.player.controls && !this.player.controls.isLocked) {
-                        try { this.player.controls.lock(); } catch (e) {}
+                        try { this.player.lockControls(); } catch (e) {}
                     }
                     const menu = document.getElementById('main-menu');
                     if (menu) menu.style.display = 'none';
                     this.setHotbarVisible(true);
-                    this.refreshStudioPaletteVisibility();
+                    // Hide palette so clicks go back to canvas; reopen with ESC if needed
+                    try { palette.classList.add('hidden'); } catch (e) {}
                     // Clear any pending studio placement so clicks won't place until reselected
                     this.studioSelectedPrefab = null;
                     this.studioSelectedOptions = null;
@@ -554,12 +537,35 @@ class Game {
                         try { this.player.scene.remove(this.player.studioSelectionHelper); } catch (e) {}
                         this.player.studioSelectionHelper = null;
                     }
+                    this.refreshStudioPaletteVisibility();
                     if (this.bgAudio && this.bgAudio.paused) this.playBackgroundMusic();
+                    return;
+                } else if (action === 'float-toggle') {
+                    if (this.player && this.player.gameMode === 'studio') {
+                        this.player.isFloating = !this.player.isFloating;
+                        const btnLabel = this.player.isFloating ? 'FLOAT ON' : 'FLOAT OFF';
+                        btn.innerText = btnLabel;
+                        if (!this.player.isFloating) {
+                            const y = this.player.getSurfaceHeight(this.player.position.x, this.player.position.z);
+                            this.player.mesh.position.y = y;
+                            this.player.velocity.y = 0;
+                        }
+                    }
                     return;
                 } else if (action === 'spawn-npc') {
                     if (this.enemyManager && typeof this.enemyManager.spawnEnemy === 'function') {
                         this.enemyManager.spawnEnemy(true);
                     }
+                    return;
+                } else if (action === 'drops') {
+                    this.spawnStudioDrops();
+                    return;
+                } else if (action === 'menu') {
+                    this.showPauseMenu();
+                    return;
+                } else if (action === 'quit') {
+                    try { localStorage.removeItem('voxel-firecraft-settings'); } catch (e) {}
+                    location.reload();
                     return;
                 }
                 const prefab = btn.getAttribute('data-prefab');
@@ -826,8 +832,11 @@ class Game {
         // Hide hotbar when menu is open
         this.setHotbarVisible(false);
 
-        // Hide studio palette when menu is open
-        this.refreshStudioPaletteVisibility();
+        // Reopen studio palette when pausing in studio mode so the user must press ESC to re-arm building
+        if (this.player && this.player.gameMode === 'studio') {
+            const palette = document.getElementById('studio-palette');
+            if (palette) palette.classList.remove('hidden');
+        }
     }
 
     // Background music control

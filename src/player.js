@@ -647,13 +647,15 @@ export class Player {
 
         // Mouse Inputs
         const onMouseDown = (event) => {
+            // In Studio, allow selection even without pointer lock
+            if (this.gameMode === 'studio') {
+                const hitObj = this.selectStudioObject(event);
+                if (hitObj) return; // consume click for selection/move
+                const hitBlock = this.selectBlockUnderCrosshair();
+                if (hitBlock) return;
+            }
+
             if (this.controls.isLocked) {
-                if (this.gameMode === 'studio') {
-                    const hitObj = this.selectStudioObject(event);
-                    if (hitObj) return; // consume click for selection/move
-                    const hitBlock = this.selectBlockUnderCrosshair();
-                    if (hitBlock) return;
-                }
                 if (event.button === 0) { // Left Click
                     this.shoot();
                 } else if (event.button === 2) { // Right Click
@@ -689,7 +691,10 @@ export class Player {
         if (this.isPaused) return;
 
         try {
-            this.controls.lock();
+            const res = this.controls.lock();
+            if (res && typeof res.catch === 'function') {
+                res.catch(() => {}); // swallow SecurityError if user exits before completion
+            }
         } catch (e) {
             console.warn('Unable to lock pointer:', e);
         }
@@ -2223,15 +2228,28 @@ export class Player {
     }
 
     getBlockTarget(existingBlock = null) {
-        const forward = new THREE.Vector3();
-        this.camera.getWorldDirection(forward);
-        forward.y = 0;
-        forward.normalize();
         const size = existingBlock && existingBlock.userData && existingBlock.userData.size ? existingBlock.userData.size : this.blockSize;
+        const ray = new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+        const snap = (v) => Math.round(v);
 
-        const pos = this.mesh.position.clone().add(forward.multiplyScalar(2));
-        pos.x = Math.round(pos.x);
-        pos.z = Math.round(pos.z);
+        let hitPoint = null;
+        if (this.world && Array.isArray(this.world.objects)) {
+            // Only consider ground/blocks for placement
+            const targets = this.world.objects.filter(o => o && o.userData && (o.userData.type === 'block' || o.userData.gameName === 'Ground'));
+            const hits = ray.intersectObjects(targets, true);
+            if (hits.length > 0) {
+                hitPoint = hits[0].point.clone();
+            }
+        }
+        if (!hitPoint) {
+            // Fallback: place just in front of camera at close range
+            const forward = new THREE.Vector3();
+            this.camera.getWorldDirection(forward);
+            hitPoint = this.mesh.position.clone().add(forward.multiplyScalar(1.2));
+        }
+
+        const pos = new THREE.Vector3(snap(hitPoint.x), hitPoint.y, snap(hitPoint.z));
 
         if (this.world && typeof this.world.halfMapSize === 'number') {
             const limit = this.world.halfMapSize - 1;
@@ -2239,7 +2257,7 @@ export class Player {
             pos.z = Math.max(-limit, Math.min(limit, pos.z));
         }
 
-        let baseY = this.world.getHeightAt ? this.world.getHeightAt(pos.x, pos.z) : 0;
+        let baseY = this.world.getHeightAt ? this.world.getHeightAt(pos.x, pos.z) : hitPoint.y;
         const existingBlocks = (this.world.objects || []).filter(obj => obj.userData && obj.userData.type === 'block' && obj !== existingBlock);
         const atSameXZ = existingBlocks.filter(b => Math.abs(b.position.x - pos.x) < 0.1 && Math.abs(b.position.z - pos.z) < 0.1);
         if (atSameXZ.length > 0) {
