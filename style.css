@@ -394,9 +394,9 @@ html {
 
 #vehicle-hud {
     position: absolute;
-    top: 150px; /* stacked right under the main dashboard */
+    top: 330px !important; /* stacked right under the main dashboard */
     left: 10px;
-    width: 210px;
+    width: 275px !important;
     background: rgba(0, 0, 0, 0.7);
     padding: 10px 12px;
     border-radius: 10px;
