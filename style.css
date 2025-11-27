@@ -607,8 +607,8 @@ html {
   border-radius: 15px;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  width: 90%;
-  max-width: 500px;
+  width: 100%;
+  max-width: 900px;
   max-height: 85vh;
   overflow-y: auto;
   overflow-x: hidden;
@@ -638,6 +638,8 @@ html {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
 .tab-btn {
@@ -661,10 +663,78 @@ html {
   display: none !important;
 }
 
+.mode-header {
+  color: #fff;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  width: fit-content;
+}
+
+.menu-helper {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 .menu-group {
   margin-bottom: 20px;
   display: flex;
   flex-direction: column;
+}
+
+.input-with-btn {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.input-with-btn input[type="text"] {
+  flex: 1;
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.checkbox-group {
+  margin-bottom: 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  font-weight: bold;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
 }
 
 .menu-group label {
@@ -736,6 +806,30 @@ html {
 #quit-btn:active {
   transform: translateY(5px);
   box-shadow: none;
+}
+
+.primary-cta {
+  margin-top: 10px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #00d8ff, #0077b6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  box-shadow: 0 10px 30px rgba(0, 123, 191, 0.35);
+}
+
+.primary-cta:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 12px 34px rgba(0, 123, 191, 0.45);
+}
+
+.primary-cta:active {
+  transform: translateY(1px);
+  box-shadow: 0 8px 24px rgba(0, 123, 191, 0.35);
 }
 
 /* Responsive adjustments for smaller screens */
@@ -846,13 +940,13 @@ html {
 .tc-look-area {
   /* invisible right-side area used to capture swipe/drag to rotate camera */
   position: absolute;
-  right: 0;
-  top: 0;
+  top: 0px !important;
   bottom: 0;
-  width: 55%;
+  width: 50% !important;
+  left: 50% !important;
   z-index: 190 !important;
   touch-action: none;
-  background: transparent;
+  background: transparent !important;
 }
 
 .tc-btn {

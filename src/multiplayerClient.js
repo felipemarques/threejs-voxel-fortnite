@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export class MultiplayerClient {
-    constructor({ player, scene, url, nick = 'Player', color = '#29b6f6', roomCode = 'PUBLIC' }) {
+    constructor({ player, scene, url, nick = 'Player', color = '#29b6f6', roomCode = 'PUBLIC', settings = null }) {
         this.player = player;
         this.scene = scene;
         this.url = url;
@@ -17,7 +17,32 @@ export class MultiplayerClient {
         this.lastAnimSig = null;
         this.heartbeatTimer = 0;
         this.isHost = false;
+        this.roomSettings = settings;
+        this._manualClose = false;
+        this.deadPeers = new Set();
+        this.matchLive = false;
         this.connect();
+    }
+
+    applyColorToTorso(mesh, colorHex) {
+        if (!mesh || !colorHex) return;
+        let applied = false;
+        const color = new THREE.Color(colorHex);
+        mesh.traverse((n) => {
+            if (!n.isMesh || !n.material || Array.isArray(n.material)) return;
+            const name = (n.userData && n.userData.gameName) ? n.userData.gameName.toLowerCase() : '';
+            const isTorso = name.includes('body') || name.includes('torso') || name.includes('shirt') || name.includes('clothes') ||
+                (n.geometry && n.geometry.parameters && Math.abs(n.geometry.parameters.width - 0.6) < 0.05);
+            if (isTorso) {
+                n.material = n.material.clone();
+                n.material.color = color;
+                applied = true;
+            }
+        });
+        if (mesh.userData) {
+            mesh.userData.color = colorHex;
+        }
+        return applied;
     }
 
     connect() {
@@ -39,7 +64,16 @@ export class MultiplayerClient {
             };
             this.socket.onmessage = (ev) => this.handleMessage(ev);
             this.socket.onclose = () => {
-                setTimeout(() => this.connect(), 1500);
+                // Remove all remote players on disconnect to avoid ghost meshes
+                this.others.forEach(mesh => {
+                    try { this.scene.remove(mesh); } catch (e) {}
+                });
+                this.others.clear();
+                this.deadPeers.clear();
+                this.matchLive = false;
+                if (!this._manualClose) {
+                    setTimeout(() => this.connect(), 1500);
+                }
             };
             this.socket.onerror = () => {};
         } catch (e) {
@@ -55,28 +89,33 @@ export class MultiplayerClient {
             } else if (data.type === 'welcome') {
                 this.id = data.id;
                 this.isHost = !!data.isHost;
+                if (data.settings) this.roomSettings = data.settings;
                 if (this.onPeersChanged) this.onPeersChanged(this.getPeerCount());
                 if (this.onHostChanged) this.onHostChanged(this.isHost);
+                if (data.settings && this.onSettings) this.onSettings(data.settings);
             } else if (data.type === 'player-join') {
-                // Create placeholder
-                this.ensureRemote(data.id);
+                // Create placeholder, ignore self
+                if (data.id && data.id !== this.id) {
+                    this.ensureRemote(data.id);
+                }
                 if (this.onPeersChanged) this.onPeersChanged(this.getPeerCount());
             } else if (data.type === 'player-leave') {
                 this.removeRemote(data.id);
                 if (this.onPeersChanged) this.onPeersChanged(this.getPeerCount());
             } else if (data.type === 'state' && data.id !== this.id) {
+                if (this.deadPeers.has(data.id)) return; // ignore updates from dead peers
                 const mesh = this.ensureRemote(data.id, data.color);
                 if (mesh && data.pos) {
+                    if (data.color && mesh.userData?.color !== data.color) {
+                        this.applyColorToTorso(mesh, data.color);
+                    }
                     mesh.position.set(data.pos.x, data.pos.y, data.pos.z);
                     this.applyRemoteAnimation(mesh, data.anim);
                     this.updateLabel(mesh, data.nick);
                 }
             } else if (data.type === 'hit') {
-                if (data.targetId && data.targetId === this.id && this.player) {
-                    const dmg = typeof data.amount === 'number' ? data.amount : 0;
-                    if (dmg > 0 && typeof this.player.takeDamage === 'function') {
-                        this.player.takeDamage(dmg);
-                    }
+                if (this.onHit) {
+                    this.onHit(data);
                 }
             } else if (data.type === 'host-changed') {
                 this.isHost = data.hostId === this.id;
@@ -85,6 +124,16 @@ export class MultiplayerClient {
                 if (this.onCountdown) this.onCountdown(data.duration || 10);
             } else if (data.type === 'match-start') {
                 if (this.onMatchStart) this.onMatchStart();
+                this.matchLive = true;
+            } else if (data.type === 'settings') {
+                this.roomSettings = data.settings;
+                if (this.onSettings) this.onSettings(data.settings);
+            } else if (data.type === 'player-dead') {
+                if (data.id) {
+                    this.deadPeers.add(data.id);
+                    this.killRemote(data.id);
+                    if (this.onPeerDeath) this.onPeerDeath(data.id);
+                }
             }
         } catch (e) {
             console.warn('Multiplayer parse error:', e);
@@ -93,10 +142,19 @@ export class MultiplayerClient {
 
     ensureRemote(id, colorOverride = null) {
         if (!id || id === this.id) return null;
+        if (this.deadPeers && this.deadPeers.has(id)) return null;
         if (this.others.has(id)) return this.others.get(id);
         const mesh = this.clonePlayerAvatar(colorOverride);
         if (mesh) {
             mesh.userData = { ...(mesh.userData || {}), gameId: id, gameName: 'Player', color: colorOverride || this.color };
+            this.applyColorToTorso(mesh, colorOverride || this.color);
+            // Remote players: disable shadow casting to avoid double-shadow artifacts
+            mesh.traverse(n => {
+                if (n.isMesh) {
+                    n.castShadow = false;
+                    n.receiveShadow = true;
+                }
+            });
             this.scene.add(mesh);
             this.others.set(id, mesh);
             return mesh;
@@ -123,6 +181,18 @@ export class MultiplayerClient {
         }
     }
 
+    killRemote(id) {
+        const mesh = this.others.get(id);
+        if (!mesh) return;
+        try {
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.userData.dead = true;
+        } catch (e) {}
+        setTimeout(() => {
+            this.removeRemote(id);
+        }, 3500);
+    }
+
     clonePlayerAvatar(colorOverride = null) {
         if (!this.player || !this.player.mesh) return null;
         try {
@@ -138,10 +208,12 @@ export class MultiplayerClient {
                     if (n.geometry && n.geometry.clone) {
                         n.geometry = n.geometry.clone();
                     }
-                    // Apply color override only to torso/clothes
+                    // Apply color override to shirt/torso
                     if (colorOverride && n.material && !Array.isArray(n.material)) {
                         const name = (n.userData && n.userData.gameName) ? n.userData.gameName.toLowerCase() : '';
-                        if (name.includes('body') || name.includes('torso') || name.includes('shirt') || name.includes('clothes')) {
+                        // Fallback: also check geometry size (torso roughly 0.6x0.8x0.3)
+                        const isTorso = name.includes('body') || name.includes('torso') || name.includes('shirt') || name.includes('clothes') || (n.geometry && n.geometry.parameters && Math.abs(n.geometry.parameters.width - 0.6) < 0.05);
+                        if (isTorso) {
                             n.material = n.material.clone();
                             n.material.color = new THREE.Color(colorOverride);
                         }
@@ -190,6 +262,7 @@ export class MultiplayerClient {
         if (this.lastSend < this.sendInterval) return;
         this.lastSend = 0;
         if (!this.player || !this.player.mesh) return;
+        if (this.player.isDead) return;
         const pos = this.player.mesh.position;
         const anim = {
             arms: {
@@ -227,6 +300,7 @@ export class MultiplayerClient {
     }
 
     dispose() {
+        this._manualClose = true;
         if (this.socket) {
             try { this.socket.close(); } catch (e) {}
         }
@@ -269,5 +343,26 @@ export class MultiplayerClient {
     sendStart() {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
         try { this.socket.send(JSON.stringify({ type: 'start' })); } catch (e) {}
+    }
+
+    sendSettings(settings) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+        if (!this.isHost || !settings) return;
+        try { this.socket.send(JSON.stringify({ type: 'settings', settings })); } catch (e) {}
+    }
+
+    sendDeath() {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+        if (!this.id) return;
+        try { this.socket.send(JSON.stringify({ type: 'player-dead', id: this.id })); } catch (e) {}
+    }
+
+    isMatchLive() {
+        return this.matchLive === true;
+    }
+
+    resetMatchState() {
+        this.deadPeers.clear();
+        this.matchLive = false;
     }
 }

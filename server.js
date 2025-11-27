@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3001;
 const wss = new WebSocketServer({ port: PORT });
 
 const clients = new Map(); // id -> { ws, room }
-const rooms = new Map();   // roomCode -> { clients: Set<id>, hostId: string, countdown: NodeJS.Timeout | null }
+const rooms = new Map();   // roomCode -> { clients: Set<id>, hostId: string, countdown: NodeJS.Timeout | null, settings: any, lastStart: number }
 
 function broadcastToRoom(roomCode, data) {
   const room = rooms.get(roomCode);
@@ -19,6 +19,15 @@ function broadcastToRoom(roomCode, data) {
       try { entry.ws.send(msg); } catch (e) {}
     }
   }
+}
+
+function logRoom(roomCode, extra = '') {
+  const room = rooms.get(roomCode);
+  const count = room ? room.clients.size : 0;
+  const host = room ? room.hostId : 'none';
+  const settings = room && room.settings ? JSON.stringify(room.settings) : 'no-settings';
+  const start = room && room.lastStart ? new Date(room.lastStart).toISOString() : 'n/a';
+  console.log(`[MP][room:${roomCode}] players=${count} host=${host} started=${start} settings=${settings}${extra ? ' ' + extra : ''}`);
 }
 
 wss.on('connection', (ws) => {
@@ -43,7 +52,7 @@ wss.on('connection', (ws) => {
         entry.room = data.room;
         let room = rooms.get(data.room);
         if (!room) {
-          room = { clients: new Set(), hostId: id, countdown: null };
+          room = { clients: new Set(), hostId: id, countdown: null, settings: null, lastStart: 0 };
           rooms.set(data.room, room);
         }
         room.clients.add(id);
@@ -51,8 +60,9 @@ wss.on('connection', (ws) => {
         if (!room.hostId || !room.clients.has(room.hostId)) {
           room.hostId = id;
         }
-        ws.send(JSON.stringify({ type: 'welcome', id, room: data.room, isHost: room.hostId === id }));
+        ws.send(JSON.stringify({ type: 'welcome', id, room: data.room, isHost: room.hostId === id, settings: room.settings || null }));
         broadcastToRoom(data.room, { type: 'player-join', id });
+        logRoom(data.room, '[join]');
       }
 
       if (!entry.room) return; // ignore until joined
@@ -68,9 +78,17 @@ wss.on('connection', (ws) => {
         if (room.countdown) clearTimeout(room.countdown);
         broadcastToRoom(entry.room, { type: 'start-countdown', duration: 10 });
         room.countdown = setTimeout(() => {
+          room.lastStart = Date.now();
           broadcastToRoom(entry.room, { type: 'match-start' });
           room.countdown = null;
+          logRoom(entry.room, '[match-start]');
         }, 10000);
+      } else if (data.type === 'settings' && room.hostId === id && data.settings) {
+        room.settings = data.settings;
+        broadcastToRoom(entry.room, { type: 'settings', settings: room.settings, hostId: room.hostId });
+        logRoom(entry.room, '[settings-update]');
+      } else if (data.type === 'player-dead' && data.id) {
+        broadcastToRoom(entry.room, { type: 'player-dead', id: data.id });
       }
     } catch (e) {}
   });
@@ -91,6 +109,9 @@ wss.on('connection', (ws) => {
       }
       if (room.clients.size === 0) {
         rooms.delete(entry.room);
+        console.log(`[MP][room:${entry.room}] closed (empty)`);
+      } else {
+        logRoom(entry.room, '[leave]');
       }
     }
     clients.delete(id);

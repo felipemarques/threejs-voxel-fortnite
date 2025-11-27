@@ -39,6 +39,12 @@ class Game {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB); // Sky blue
         this.scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
+        this._animationStarted = false;
+        this._selectedMode = 'survival';
+        this._defaultRandom = Math.random;
+        this._currentRandomSeed = null;
+        this.matchSettings = null;
+        this.lastPlaySettings = null;
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         // Cap pixel ratio to avoid ultra-high-res rendering on dense displays
@@ -53,6 +59,7 @@ class Game {
         this.multiplayerDropActive = false;
         this.matchPhase = 'live';
         this.lobbyCountdown = 0;
+        this.forceFixedMultiplayerSpawn = false;
 
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -115,6 +122,27 @@ class Game {
         });
     }
 
+    applyDeterministicRandom(seed) {
+        if (!seed) return;
+        this._currentRandomSeed = seed;
+        const str = String(seed);
+        let h = 1779033703 ^ str.length;
+        for (let i = 0; i < str.length; i++) {
+            h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+            h = (h << 13) | (h >>> 19);
+        }
+        h = Math.imul(h ^ (h >>> 16), 2246822507);
+        h = (h ^ (h >>> 13)) >>> 0;
+        let state = h;
+        const seeded = () => {
+            state = (state + 0x6D2B79F5) | 0;
+            let t = Math.imul(state ^ (state >>> 15), 1 | state);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+        Math.random = seeded;
+    }
+
     spawnStudioDrops() {
         if (!this.itemManager || !this.player || this.player.gameMode !== 'studio') return;
         try {
@@ -174,24 +202,35 @@ class Game {
         if (!this.player || !this.world) return;
         const limit = this.world && typeof this.world.halfMapSize === 'number' ? this.world.halfMapSize - 5 : 100;
         let pos = null;
-        for (let i = 0; i < 12; i++) {
-            const x = (Math.random() * 2 - 1) * limit;
-            const z = (Math.random() * 2 - 1) * limit;
-            let y = 0;
-            if (this.world && typeof this.world.getHeightAt === 'function') {
-                y = this.world.getHeightAt(x, z);
-            }
-            const farEnough = !this.multiplayer || this.multiplayer.others.size === 0 || Array.from(this.multiplayer.others.values()).every(o => {
-                if (!o || !o.position) return true;
-                const dx = o.position.x - x;
-                const dz = o.position.z - z;
-                return Math.sqrt(dx * dx + dz * dz) > 15;
-            });
-            if (farEnough) {
-                pos = { x, y, z };
-                break;
+        const rand = this._defaultRandom || Math.random;
+
+        // Fixed spawn for debugging minimap alignment
+        if (this.forceFixedMultiplayerSpawn) {
+            const fx = 0;
+            const fz = 0;
+            const fy = (this.world && typeof this.world.getHeightAt === 'function') ? this.world.getHeightAt(fx, fz) : 0;
+            pos = { x: fx, y: fy, z: fz };
+        } else {
+            for (let i = 0; i < 12; i++) {
+                const x = (rand() * 2 - 1) * limit;
+                const z = (rand() * 2 - 1) * limit;
+                let y = 0;
+                if (this.world && typeof this.world.getHeightAt === 'function') {
+                    y = this.world.getHeightAt(x, z);
+                }
+                const farEnough = !this.multiplayer || this.multiplayer.others.size === 0 || Array.from(this.multiplayer.others.values()).every(o => {
+                    if (!o || !o.position) return true;
+                    const dx = o.position.x - x;
+                    const dz = o.position.z - z;
+                    return Math.sqrt(dx * dx + dz * dz) > 15;
+                });
+                if (farEnough) {
+                    pos = { x, y, z };
+                    break;
+                }
             }
         }
+
         if (!pos) {
             pos = { x: 0, y: 0, z: 0 };
         }
@@ -239,10 +278,32 @@ class Game {
 
     startMultiplayerMatch() {
         this.matchPhase = 'live';
+        if (this.multiplayer) this.multiplayer.matchLive = true;
         this.refreshMultiplayerTargets();
         const lobbyUi = document.getElementById('mp-lobby');
         if (lobbyUi) lobbyUi.classList.add('hidden');
         this.lobbyCountdown = 0;
+    }
+
+    checkMultiplayerVictory() {
+        if (!this.multiplayer) return;
+        const deadSet = this.multiplayer.deadPeers || new Set();
+        let aliveRemotes = 0;
+        if (this.multiplayer.others && this.multiplayer.others.size > 0) {
+            this.multiplayer.others.forEach((mesh, id) => {
+                const dead = deadSet.has(id) || (mesh && mesh.userData && mesh.userData.dead);
+                if (!dead) aliveRemotes += 1;
+            });
+        }
+        const iAmAlive = this.player && !this.player.isDead;
+        const totalAlive = (iAmAlive ? 1 : 0) + aliveRemotes;
+        if (totalAlive === 1 && iAmAlive) {
+            // Victory for the last standing player
+            if (this.hud && typeof this.hud.showVictory === 'function') {
+                this.hud.showVictory();
+            }
+            if (this.multiplayer) this.multiplayer.matchLive = false;
+        }
     }
 
     setupMenu() {
@@ -263,19 +324,33 @@ class Game {
         const fullscreenCheckbox = document.getElementById('setting-fullscreen');
         const gameModeSelect = document.getElementById('setting-game-mode');
         const quitBtn = document.getElementById('quit-btn');
+        const activeModeLabel = document.getElementById('active-mode-label');
+        const activeModeChip = document.getElementById('active-mode-chip');
         const floatBtn = document.getElementById('float-btn');
         const openaiKeyInput = document.getElementById('setting-openai-key');
         const groqKeyInput = document.getElementById('setting-groq-key');
         const nvidiaKeyInput = document.getElementById('setting-nvidia-key');
         const mpServerInput = document.getElementById('setting-mp-server');
+        const mpSeedInput = document.getElementById('setting-mp-seed');
         const mpRoomInput = document.getElementById('setting-mp-room');
         const mpRoomGenerate = document.getElementById('mp-room-generate');
         const mpNickInput = document.getElementById('setting-mp-nickname');
         const mpColorInput = document.getElementById('setting-mp-color');
         const mpZombiesCheckbox = document.getElementById('setting-mp-zombies');
+        const mpFixedSpawnCheckbox = document.getElementById('setting-mp-fixed-spawn');
+        const languageSelect = document.getElementById('setting-language');
         const hotkeyHint = document.getElementById('hotkey-hint');
         const hotkeyModal = document.getElementById('hotkey-modal');
         const hotkeyClose = document.getElementById('hotkey-modal-close');
+        const arenaTimeInput = document.getElementById('setting-arena-time');
+        const arenaTimeVal = document.getElementById('arena-time-val');
+        const arenaRespawnCheckbox = document.getElementById('setting-arena-respawn');
+        const matrixInfiniteAmmoCheckbox = document.getElementById('setting-matrix-infinite-ammo');
+        const matrixShowUICheckbox = document.getElementById('setting-matrix-show-ui');
+        const matrixAiAutospawnCheckbox = document.getElementById('setting-matrix-ai-autospawn');
+        const matrixAiHintsCheckbox = document.getElementById('setting-matrix-ai-hints');
+        const studioFlightCheckbox = document.getElementById('setting-studio-flight');
+        const studioShowGridCheckbox = document.getElementById('setting-studio-show-grid');
         
         const enemiesVal = document.getElementById('enemy-count-val');
         const stormVal = document.getElementById('storm-time-val');
@@ -315,22 +390,44 @@ class Game {
             if (s.cameraMode) cameraSelect.value = s.cameraMode;
             if (s.useTouchControls !== undefined && touchCheckbox) touchCheckbox.checked = !!s.useTouchControls;
             if (s.gameMode && gameModeSelect) gameModeSelect.value = s.gameMode;
+            if (s.gameMode) this._selectedMode = s.gameMode;
+            if (languageSelect && s.language) languageSelect.value = s.language;
             if (openaiKeyInput) openaiKeyInput.value = s.openaiKey || '';
             if (groqKeyInput) groqKeyInput.value = s.groqKey || '';
             if (nvidiaKeyInput) nvidiaKeyInput.value = s.nvidiaKey || '';
             if (mpServerInput) mpServerInput.value = s.mpServer || '';
+            if (mpSeedInput) mpSeedInput.value = s.mpSeed || '';
             if (mpRoomInput) mpRoomInput.value = s.mpRoom || '';
             if (mpNickInput) mpNickInput.value = s.mpNick || '';
             if (mpColorInput) mpColorInput.value = s.mpColor || '#29b6f6';
             if (mpZombiesCheckbox) mpZombiesCheckbox.checked = s.mpZombies !== false;
+            if (mpFixedSpawnCheckbox) mpFixedSpawnCheckbox.checked = !!s.mpFixedSpawn;
+            if (arenaTimeInput && arenaTimeVal) {
+                const val = s.arenaTime || parseInt(arenaTimeInput.value, 10) || 180;
+                arenaTimeInput.value = val;
+                arenaTimeVal.innerText = val;
+            }
+            if (arenaRespawnCheckbox) arenaRespawnCheckbox.checked = s.arenaRespawn !== false;
+            if (matrixInfiniteAmmoCheckbox) matrixInfiniteAmmoCheckbox.checked = s.matrixInfiniteAmmo !== false;
+            if (matrixShowUICheckbox) matrixShowUICheckbox.checked = s.matrixShowUI !== false;
+            if (matrixAiAutospawnCheckbox) matrixAiAutospawnCheckbox.checked = s.matrixAiAutospawn !== false;
+            if (matrixAiHintsCheckbox) matrixAiHintsCheckbox.checked = s.matrixAiHints !== false;
+            if (studioFlightCheckbox) studioFlightCheckbox.checked = s.studioFlight !== false;
+            if (studioShowGridCheckbox) studioShowGridCheckbox.checked = s.studioShowGrid !== false;
         }
 
         // Update labels live
         bindRangeLabel(enemiesInput, enemiesVal);
         bindRangeLabel(stormInput, stormVal);
         bindRangeLabel(mapSizeInput, mapSizeVal);
+        bindRangeLabel(arenaTimeInput, arenaTimeVal);
 
         playBtn.onclick = () => {
+            const selectedMode = this._selectedMode || 'survival';
+            if (selectedMode === 'multiplayer' && this.multiplayer && !this.multiplayer.isHost && !this.multiplayer.roomSettings) {
+                alert('Waiting for host settings. Please try again in a moment.');
+                return;
+            }
             const settings = {
                 difficulty: diffSelect.value,
                 enemyCount: parseInt(enemiesInput.value),
@@ -342,18 +439,30 @@ class Game {
                 musicVolume: volumeSlider ? parseInt(volumeSlider.value) : Math.round(this.bgMusicVolume * 100),
                 musicEnabled: document.getElementById('setting-music-enabled') ? document.getElementById('setting-music-enabled').checked : true,
                 cameraMode: cameraSelect.value,
+                language: languageSelect ? languageSelect.value : 'en',
                 useTouchControls: touchCheckbox ? touchCheckbox.checked : false,
                 fullscreen: fullscreenCheckbox ? fullscreenCheckbox.checked : false,
-                gameMode: gameModeSelect ? gameModeSelect.value : 'survival',
+                gameMode: selectedMode,
                 openaiKey: openaiKeyInput ? openaiKeyInput.value : '',
                 groqKey: groqKeyInput ? groqKeyInput.value : '',
                 nvidiaKey: nvidiaKeyInput ? nvidiaKeyInput.value : '',
                 mpServer: mpServerInput ? mpServerInput.value : '',
+                mpSeed: mpSeedInput ? mpSeedInput.value.trim() : '',
                 mpRoom: mpRoomInput ? mpRoomInput.value : '',
                 mpNick: mpNickInput ? mpNickInput.value : '',
                 mpColor: mpColorInput ? mpColorInput.value : '#29b6f6',
-                mpZombies: mpZombiesCheckbox ? mpZombiesCheckbox.checked : true
+                mpZombies: mpZombiesCheckbox ? mpZombiesCheckbox.checked : true,
+                mpFixedSpawn: mpFixedSpawnCheckbox ? mpFixedSpawnCheckbox.checked : false,
+                arenaTime: arenaTimeInput ? parseInt(arenaTimeInput.value, 10) : 180,
+                arenaRespawn: arenaRespawnCheckbox ? arenaRespawnCheckbox.checked : true,
+                matrixInfiniteAmmo: matrixInfiniteAmmoCheckbox ? matrixInfiniteAmmoCheckbox.checked : true,
+                matrixShowUI: matrixShowUICheckbox ? matrixShowUICheckbox.checked : true,
+                matrixAiAutospawn: matrixAiAutospawnCheckbox ? matrixAiAutospawnCheckbox.checked : true,
+                matrixAiHints: matrixAiHintsCheckbox ? matrixAiHintsCheckbox.checked : true,
+                studioFlight: studioFlightCheckbox ? studioFlightCheckbox.checked : true,
+                studioShowGrid: studioShowGridCheckbox ? studioShowGridCheckbox.checked : true
             };
+            this.lastPlaySettings = settings;
             
             // Save Settings
             localStorage.setItem('voxel-firecraft-settings', JSON.stringify(settings));
@@ -369,9 +478,15 @@ class Game {
             }
             this.requestFullscreenIfNeeded(settings.fullscreen);
             
-            // Check if game is already running (resuming from pause/settings)
-            if (this.player && this.world && this.enemyManager) {
-                // Game already exists, just resume
+            const gameRunning = this.player && this.world && this.enemyManager;
+            const sameMode = gameRunning && this.player && this.player.gameMode === selectedMode;
+            // If another mode is running, tear down before starting new one
+            if (gameRunning && !sameMode) {
+                this.resetGameState();
+            }
+
+            // Resume if same mode; otherwise start fresh
+            if (this.player && this.world && this.enemyManager && sameMode) {
                 this.isPaused = false;
                 this.clock.getDelta(); // Reset clock to prevent delta accumulation
 
@@ -412,9 +527,6 @@ class Game {
 
         if (quitBtn) {
             quitBtn.onclick = () => {
-                try {
-                    localStorage.removeItem('voxel-firecraft-settings');
-                } catch (e) {}
                 if (this.multiplayer && typeof this.multiplayer.dispose === 'function') {
                     this.multiplayer.dispose();
                 }
@@ -487,19 +599,87 @@ class Game {
         this.setHotbarVisible(false);
 
         // Tabs: simple show/hide panels
-        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
         const tabPanels = document.querySelectorAll('.tab-panel');
-        tabButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const target = btn.getAttribute('data-tab');
-                tabButtons.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                tabPanels.forEach(p => {
-                    if (p.id === target) p.classList.remove('hidden');
-                    else p.classList.add('hidden');
-                });
+        const activateTab = (btn) => {
+            if (!btn) return;
+            const target = btn.getAttribute('data-tab');
+            tabButtons.forEach(b => b.classList.toggle('active', b === btn));
+            tabPanels.forEach(p => {
+                if (p.id === target) p.classList.remove('hidden');
+                else p.classList.add('hidden');
             });
-        });
+            const mode = btn.getAttribute('data-mode');
+            if (mode && gameModeSelect) {
+                gameModeSelect.value = mode;
+                if (activeModeLabel) activeModeLabel.innerText = btn.innerText;
+                if (activeModeChip) activeModeChip.innerText = btn.innerText;
+            }
+            if (mode) this._selectedMode = mode;
+        };
+        tabButtons.forEach(btn => btn.addEventListener('click', () => activateTab(btn)));
+
+        // Restore tab from saved game mode or keep first as default
+        const savedMode = this._selectedMode || (gameModeSelect ? gameModeSelect.value : null);
+        const savedBtn = savedMode ? tabButtons.find(b => b.getAttribute('data-mode') === savedMode) : null;
+        const defaultBtn = savedBtn || tabButtons.find(b => b.classList.contains('active')) || tabButtons[0];
+        activateTab(defaultBtn);
+    }
+
+    resetGameState() {
+        // Dispose multiplayer client if active
+        if (this.multiplayer && typeof this.multiplayer.resetMatchState === 'function') {
+            this.multiplayer.resetMatchState();
+        }
+        if (this.multiplayer && typeof this.multiplayer.dispose === 'function') {
+            try { this.multiplayer.dispose(); } catch (e) { console.warn('Dispose multiplayer failed:', e); }
+        }
+        this.multiplayer = null;
+        this.multiplayerEnemyBaseCount = 0;
+        this.multiplayerDropTimer = 0;
+        this.multiplayerDropCooldown = 0;
+        this.multiplayerDropActive = false;
+        this.matchPhase = 'live';
+        this.lobbyCountdown = 0;
+        this.isPaused = false;
+        this.forceFixedMultiplayerSpawn = false;
+        this.matchSettings = null;
+
+        // Clear scene objects and re-add default lighting
+        try {
+            this.scene.clear();
+        } catch (e) { console.warn('Scene clear failed:', e); }
+        try {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            this.scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(50, 100, 50);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.left = -100;
+            dirLight.shadow.camera.right = 100;
+            dirLight.shadow.camera.top = 100;
+            dirLight.shadow.camera.bottom = -100;
+            dirLight.shadow.camera.near = 0.1;
+            dirLight.shadow.camera.far = 160;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            this.scene.add(dirLight);
+        } catch (e) { console.warn('Rebuild lights failed:', e); }
+
+        // Reset core references
+        this.player = null;
+        this.world = null;
+        this.enemyManager = null;
+        this.itemManager = null;
+        this.hud = null;
+        this.matchSettings = null;
+        this.lastPlaySettings = null;
+        // Restore default RNG
+        Math.random = this._defaultRandom;
+        this._currentRandomSeed = null;
+        if (this.multiplayer && typeof this.multiplayer.resetMatchState === 'function') {
+            this.multiplayer.resetMatchState();
+        }
     }
 
     startGame(settings) {
@@ -511,7 +691,30 @@ class Game {
         this.matchPhase = 'live';
         this.lobbyCountdown = 0;
         const effectiveSettings = { ...settings };
-        this.multiplayerEnemyBaseCount = effectiveSettings.enemyCount || 0;
+        this.forceFixedMultiplayerSpawn = effectiveSettings.gameMode === 'multiplayer' ? !!settings.mpFixedSpawn : false;
+        // Harmonize multiplayer settings (map size/seed/enemies) so all clients share the same world
+        if (effectiveSettings.gameMode === 'multiplayer') {
+            const hostSettings = (this.multiplayer && !this.multiplayer.isHost && this.multiplayer.roomSettings) ? this.multiplayer.roomSettings : null;
+            if (!this.multiplayer || this.multiplayer.isHost || !hostSettings) {
+                const seed = settings.mpSeed || Math.random().toString(36).slice(2);
+                this.matchSettings = {
+                    mapSize: settings.mapSize,
+                    enemyCount: settings.enemyCount,
+                    stormEnabled: false,
+                    seed,
+                    fixedSpawn: !!settings.mpFixedSpawn
+                };
+            } else {
+                this.matchSettings = hostSettings;
+            }
+            if (this.matchSettings) {
+                effectiveSettings.mapSize = this.matchSettings.mapSize;
+                effectiveSettings.enemyCount = this.matchSettings.enemyCount;
+                effectiveSettings.stormEnabled = this.matchSettings.stormEnabled;
+                this.forceFixedMultiplayerSpawn = !!this.matchSettings.fixedSpawn;
+                this.applyDeterministicRandom(this.matchSettings.seed || 'mp-seed');
+            }
+        }
         if (effectiveSettings.gameMode === 'matrix' || effectiveSettings.gameMode === 'studio') {
             effectiveSettings.enemyCount = 0;
             effectiveSettings.skipLoot = true;
@@ -523,15 +726,28 @@ class Game {
                 effectiveSettings.enemyCount = 0;
             }
         }
+        this.multiplayerEnemyBaseCount = effectiveSettings.enemyCount || 0;
         this.player = new Player(this.camera, this.scene, null, effectiveSettings);
+        // Apply multiplayer color to local player mesh
+        if (settings && settings.mpColor) {
+            this.player.playerColor = settings.mpColor;
+            // Recreate mesh with new color if needed
+            if (this.player.mesh) {
+                try {
+                    this.scene.remove(this.player.mesh);
+                } catch (e) {}
+            }
+            this.player.createPlayerMesh();
+        }
         if (effectiveSettings.gameMode === 'multiplayer') {
             this.matchPhase = 'lobby';
+            if (this.multiplayer) this.multiplayer.matchLive = false;
         } else {
             this.matchPhase = 'live';
         }
-        
-        // 2. ItemManager (needs player)
-        this.itemManager = new ItemManager(this.scene, this.player, effectiveSettings);
+            
+            // 2. ItemManager (needs player)
+            this.itemManager = new ItemManager(this.scene, this.player, effectiveSettings);
         
         // 3. World (needs itemManager)
         this.world = new World(this.scene, this.itemManager, effectiveSettings);
@@ -563,25 +779,58 @@ class Game {
                 url: settings.mpServer,
                 nick: settings.mpNick || 'Player',
                 color: settings.mpColor || '#29b6f6',
-                roomCode: settings.mpRoom || 'PUBLIC'
+                roomCode: settings.mpRoom || 'PUBLIC',
+                settings: this.matchSettings
             });
-            if (!settings.mpServer) {
-                alert('Multiplayer server URL not set. Please configure it in the Multiplayer tab.');
-            }
-            if (this.player && typeof this.player.setMultiplayerClient === 'function') {
-                this.player.setMultiplayerClient(this.multiplayer);
-            }
-            if (this.multiplayer) {
-                this.multiplayer.onPeersChanged = () => this.refreshMultiplayerTargets();
-                this.multiplayer.roomCode = settings.mpRoom || 'PUBLIC';
-                this.multiplayer.onHostChanged = (isHost) => this.updateLobbyUI(isHost);
-                this.multiplayer.onCountdown = (duration) => this.beginLobbyCountdown(duration);
-                this.multiplayer.onMatchStart = () => this.startMultiplayerMatch();
-                // In case the welcome/host flag arrived before callbacks were set, refresh the UI now
-                this.updateLobbyUI(this.multiplayer.isHost);
-            }
-        } else {
-            this.multiplayer = null;
+                if (!settings.mpServer) {
+                    alert('Multiplayer server URL not set. Please configure it in the Multiplayer tab.');
+                }
+                if (this.player && typeof this.player.setMultiplayerClient === 'function') {
+                    this.player.setMultiplayerClient(this.multiplayer);
+                }
+                if (this.multiplayer) {
+                    this.multiplayer.onPeersChanged = () => this.refreshMultiplayerTargets();
+                    this.multiplayer.roomCode = settings.mpRoom || 'PUBLIC';
+                    this.multiplayer.onHostChanged = (isHost) => {
+                        this.updateLobbyUI(isHost);
+                        if (isHost && this.matchSettings) {
+                            this.multiplayer.sendSettings(this.matchSettings);
+                        }
+                    };
+                    this.multiplayer.onCountdown = (duration) => this.beginLobbyCountdown(duration);
+                    this.multiplayer.onMatchStart = () => this.startMultiplayerMatch();
+                    this.multiplayer.onSettings = (roomSettings) => {
+                        this.matchSettings = roomSettings;
+                        // If we are not host and already running with different settings, restart to host settings
+                        const isHost = this.multiplayer && this.multiplayer.isHost;
+                        const runningMp = this.player && this.player.gameMode === 'multiplayer';
+                        const needsRestart = runningMp && roomSettings && (
+                            (this.world && this.world.mapSize !== roomSettings.mapSize) ||
+                            (this.multiplayerEnemyBaseCount !== roomSettings.enemyCount)
+                        );
+                        if (!isHost && roomSettings && needsRestart && this.lastPlaySettings) {
+                            const merged = { ...this.lastPlaySettings, mapSize: roomSettings.mapSize, enemyCount: roomSettings.enemyCount };
+                            this.resetGameState();
+                            this.matchSettings = roomSettings;
+                            this.applyDeterministicRandom(roomSettings.seed || 'mp-seed');
+                            this.startGame(merged);
+                        }
+                    };
+                        if (this.multiplayer.isHost && this.matchSettings) {
+                            this.multiplayer.sendSettings(this.matchSettings);
+                        }
+                    this.multiplayer.onPeerDeath = () => {
+                        this.checkMultiplayerVictory();
+                    };
+                    // In case the welcome/host flag arrived before callbacks were set, refresh the UI now
+                    this.updateLobbyUI(this.multiplayer.isHost);
+                    // If host, rebroadcast settings including fixed spawn flag
+                    if (this.multiplayer.isHost && this.matchSettings) {
+                        this.multiplayer.sendSettings(this.matchSettings);
+                    }
+                }
+            } else {
+                this.multiplayer = null;
         }
         // AI Builder mode: no enemies/loot, show AI panel
         if (effectiveSettings.gameMode === 'matrix-ai') {
@@ -606,6 +855,16 @@ class Game {
             this.multiplayerEnemyBaseCount = effectiveSettings.enemyCount || 0;
             if (typeof this.enemyManager.setTargetCount === 'function') {
                 this.enemyManager.setTargetCount(this.multiplayerEnemyBaseCount);
+            }
+            // Hook remote hit handler to apply damage
+            if (this.multiplayer) {
+                this.multiplayer.onHit = (payload) => {
+                    if (!payload || payload.targetId !== this.multiplayer.id) return;
+                    const amt = typeof payload.amount === 'number' ? payload.amount : 0;
+                    if (amt > 0 && this.player && typeof this.player.takeDamage === 'function') {
+                        this.player.takeDamage(amt);
+                    }
+                };
             }
         }
         
@@ -695,7 +954,10 @@ class Game {
             } catch (e) { console.warn('Pointer lock on start skipped/failed:', e); }
         }
 
-        this.animate();
+        if (!this._animationStarted) {
+            this._animationStarted = true;
+            this.animate();
+        }
     }
 
     setupLongPressMenu() {

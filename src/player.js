@@ -252,6 +252,28 @@ export class Player {
         }
     }
 
+    separateFromRemotePlayers() {
+        if (!this.multiplayerClient || !this.multiplayerClient.others || this.multiplayerClient.others.size === 0) return;
+        const radius = 0.6;
+        const minDist = radius * 2;
+        const myPos = this.mesh.position;
+        this.multiplayerClient.others.forEach((mesh) => {
+            if (!mesh || !mesh.position) return;
+            if (mesh.userData && mesh.userData.dead) return;
+            const dx = myPos.x - mesh.position.x;
+            const dz = myPos.z - mesh.position.z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq < minDist * minDist && distSq > 0.0001) {
+                const dist = Math.sqrt(distSq);
+                const push = (minDist - dist) * 0.5;
+                const nx = dx / dist;
+                const nz = dz / dist;
+                myPos.x += nx * push;
+                myPos.z += nz * push;
+            }
+        });
+    }
+
     placeBlock() {
         if (!this.world) return;
         const target = this.getBlockTarget();
@@ -273,7 +295,9 @@ export class Player {
         this.mesh = new THREE.Group();
         this.scene.add(this.mesh);
 
-        const material = new THREE.MeshStandardMaterial({ color: 0x3498db }); // Blue shirt
+        // Shirt color can be customized (multiplayer color)
+        const shirtColor = this.playerColor || 0x3498db;
+        const material = new THREE.MeshStandardMaterial({ color: shirtColor }); // Blue/default shirt
         const skinMat = new THREE.MeshStandardMaterial({ color: 0xffccaa }); // Skin
         const pantsMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 }); // Dark pants
 
@@ -1211,13 +1235,16 @@ export class Player {
             }
 
             // Keep player inside map bounds
-            if (this.world && typeof this.world.halfMapSize === 'number') {
-                const limit = this.world.halfMapSize - 1;
-                this.mesh.position.x = Math.max(-limit, Math.min(limit, this.mesh.position.x));
-                this.mesh.position.z = Math.max(-limit, Math.min(limit, this.mesh.position.z));
-            }
+        if (this.world && typeof this.world.halfMapSize === 'number') {
+            const limit = this.world.halfMapSize - 1;
+            this.mesh.position.x = Math.max(-limit, Math.min(limit, this.mesh.position.x));
+            this.mesh.position.z = Math.max(-limit, Math.min(limit, this.mesh.position.z));
+        }
 
-            // Track distance traveled
+        // Prevent overlapping with other multiplayer players (simple sphere separation)
+        this.separateFromRemotePlayers();
+
+        // Track distance traveled
         if (this.previousPosition.length() > 0) {
             const distance = this.mesh.position.distanceTo(this.previousPosition);
             this.distanceTraveled += distance;
@@ -1939,6 +1966,26 @@ export class Player {
                 }
             });
 
+            // Multiplayer melee: hit nearby remote players
+            if (this.gameMode === 'multiplayer' && this.multiplayerClient && this.multiplayerClient.others && this.multiplayerClient.others.size > 0) {
+                const coneAngle = Math.PI / 3;
+                const maxDist = 3;
+                this.multiplayerClient.others.forEach((mesh, pid) => {
+                    if (!mesh || !mesh.position) return;
+                    if (mesh.userData && mesh.userData.dead) return;
+                    const dist = this.mesh.position.distanceTo(mesh.position);
+                    if (dist > maxDist) return;
+                    const dirToTarget = new THREE.Vector3().subVectors(mesh.position, this.mesh.position).normalize();
+                    const angle = playerDir.angleTo(dirToTarget);
+                    if (angle < coneAngle) {
+                        if (typeof this.multiplayerClient.sendHit === 'function') {
+                            this.multiplayerClient.sendHit(pid, 10);
+                        }
+                        hitSomething = true;
+                    }
+                });
+            }
+
             if (hitSomething) {
                 this.playSmack();
             }
@@ -2401,6 +2448,10 @@ export class Player {
             // No damage in Matrix mode
             return;
         }
+        if (this.multiplayerClient && !this.multiplayerClient.isMatchLive()) {
+            // No friendly fire during lobby
+            return;
+        }
         if (this.isBlocking) {
             amount *= 0.2; // 80% damage reduction
             console.log("Blocked! Reduced damage to " + amount);
@@ -2435,6 +2486,12 @@ export class Player {
         this.isDead = true;
         this.controls.unlock();
         this.mesh.rotation.x = -Math.PI / 2; // Fall over
+        if (this.multiplayerClient && typeof this.multiplayerClient.sendDeath === 'function') {
+            this.multiplayerClient.sendDeath();
+        }
+        // Stop movement/updates for ragdoll pose
+        this.moveForward = this.moveBackward = this.moveLeft = this.moveRight = false;
+        this.velocity.set(0, 0, 0);
     }
 
     checkCollision(direction, distance) {

@@ -31,6 +31,7 @@ export class HUD {
         this.dropCount = document.getElementById('drop-count');
         this.distanceTraveled = document.getElementById('distance-traveled');
         this.playerSpeed = document.getElementById('player-speed');
+        this.mapSizeText = document.getElementById('map-size-readout');
         this.memoryUsage = document.getElementById('memory-usage'); // legacy, optional
         this.targetInspect = document.getElementById('target-inspect');
         // Perf dashboard elements
@@ -216,6 +217,11 @@ export class HUD {
                 speed = this.player.currentSpeed * 3.6;
             }
             this.playerSpeed.innerText = speed.toFixed(1);
+        }
+        // Map size readout (static per match)
+        if (this.mapSizeText) {
+            const size = (this.world && this.world.mapSize) ? this.world.mapSize : this.mapSize;
+            this.mapSizeText.innerText = Math.round(size);
         }
 
         // Performance dashboard
