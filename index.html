@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voxel Firecraft Prototype</title>
     <link rel="icon" type="image/png" href="/threejs-voxel-firecraft/dist/assets/favicon-BAg40dZS.png">
-  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/index-CXHTIEc3.js"></script>
-  <link rel="stylesheet" crossorigin href="/threejs-voxel-firecraft/dist/assets/index-C5_M2eVM.css">
+  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/index-BZgAkeje.js"></script>
+  <link rel="stylesheet" crossorigin href="/threejs-voxel-firecraft/dist/assets/index-BPBpoP0n.css">
 </head>
 <body>
 
@@ -84,6 +84,7 @@
             <div>Drops: <span id="drop-count">0</span></div>
             <div>Distance: <span id="distance-traveled">0.00</span> km</div>
             <div>Speed: <span id="player-speed">0.0</span> km/h</div>
+            <div>Map Size: <span id="map-size-readout">--</span> m</div>
             <div id="target-inspect">Target: ---</div>
             <div id="debug-info" style="display: none; color: #f1c40f; margin-top: 10px; border-top: 1px solid #555; padding-top: 5px;">
                 <div>Target: <span id="debug-target-name">None</span></div>
@@ -155,33 +156,18 @@
         
         <div class="menu-container">
             <div class="tab-buttons">
-                <button class="tab-btn active" data-tab="tab-general">General</button>
-                <button class="tab-btn" data-tab="tab-ai">AI</button>
-                <button class="tab-btn" data-tab="tab-mp">Multiplayer</button>
+                <button class="tab-btn" data-tab="tab-general">General</button>
+                <button class="tab-btn" data-tab="tab-sound">Sound</button>
+                <button class="tab-btn active" data-tab="tab-survival" data-mode="survival">Arcade / Survival</button>
+                <button class="tab-btn" data-tab="tab-arena" data-mode="arena">Arena</button>
+                <button class="tab-btn" data-tab="tab-matrix" data-mode="matrix">Matrix</button>
+                <button class="tab-btn" data-tab="tab-matrix-ai" data-mode="matrix-ai">Matrix AI</button>
+                <button class="tab-btn" data-tab="tab-mp" data-mode="multiplayer">Multiplayer</button>
+                <button class="tab-btn" data-tab="tab-studio" data-mode="studio">Studio</button>
+                <button class="tab-btn" data-tab="tab-ai">Configurações de IA</button>
             </div>
 
             <div id="tab-general" class="tab-panel">
-                <div class="menu-group">
-                    <label>Difficulty</label>
-                    <select id="setting-difficulty">
-                        <option value="easy">Easy</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="hard">Hard</option>
-                    </select>
-                </div>
-
-                <div class="menu-group">
-                    <label>Game Mode</label>
-                <select id="setting-game-mode">
-                    <option value="survival" selected>Survival / Arcade</option>
-                    <option value="arena">Arena (Krunker-like)</option>
-                    <option value="matrix">Matrix (Player Only)</option>
-                    <option value="matrix-ai">Matrix AI Builder</option>
-                    <option value="multiplayer">Multiplayer</option>
-                    <option value="studio">Studio (Build Blocks)</option>
-                </select>
-            </div>
-
                 <div class="menu-group">
                     <label>Enemies: <span id="enemy-count-val">15</span></label>
                     <input type="range" id="setting-enemies" min="5" max="500" step="5" value="15">
@@ -200,7 +186,7 @@
 
                 <div class="menu-group">
                     <label>Map Size: <span id="map-size-val">400</span></label>
-                    <input type="range" id="setting-map-size" min="150" max="800" step="10" value="400">
+                    <input type="range" id="setting-map-size" min="20" max="800" step="10" value="400">
                 </div>
 
                 <div class="menu-group">
@@ -208,6 +194,15 @@
                     <select id="setting-camera">
                         <option value="TPS" selected>Third Person</option>
                         <option value="FPS">First Person</option>
+                    </select>
+                </div>
+
+                <div class="menu-group">
+                    <label>Language</label>
+                    <select id="setting-language">
+                        <option value="en" selected>English</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="es">Spanish</option>
                     </select>
                 </div>
 
@@ -235,18 +230,114 @@
                         Start in Fullscreen (desktop & supported mobile)
                     </label>
                 </div>
-                
+            </div>
+
+            <div id="tab-sound" class="tab-panel hidden">
                 <div class="menu-group">
-                    <label>Background Music</label>
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <label>Sound</label>
+                    <p class="menu-helper">Controle global de áudio e música de fundo.</p>
+                </div>
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
                         <input type="checkbox" id="setting-music-enabled" checked style="width:20px; height:20px;">
-                        <label for="setting-music-enabled" style="margin:0; color:white;">Enable Background Music</label>
-                    </div>
+                        Enable Background Music
+                    </label>
+                </div>
+                <div class="menu-group">
+                    <label style="margin:0; min-width:60px;">Volume:</label>
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <label style="margin:0; min-width:60px;">Volume:</label>
                         <input type="range" id="setting-music-volume" min="0" max="100" value="50" style="flex:1;">
                         <span id="setting-music-volume-val" style="color:white; font-weight:bold; min-width:35px;">50</span>
                     </div>
+                </div>
+            </div>
+
+            <div id="tab-survival" class="tab-panel hidden">
+                <div class="menu-group">
+                    <label>Modo Arcade / Survival</label>
+                    <p class="menu-helper">Modo padrão com tempestade, drops e progressão. Use as opções gerais para afinar parâmetros.</p>
+                </div>
+                <div class="menu-group">
+                    <label>Difficulty</label>
+                    <select id="setting-difficulty">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="tab-arena" class="tab-panel hidden">
+                <div class="menu-group">
+                    <label>Arena (Krunker-like)</label>
+                    <p class="menu-helper">Tiro rápido, sem tempestade. Use esta aba para focar em performance e ritmo.</p>
+                </div>
+                <div class="menu-group">
+                    <label>Duração da partida (s): <span id="arena-time-val">180</span></label>
+                    <input type="range" id="setting-arena-time" min="60" max="900" step="30" value="180">
+                </div>
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-arena-respawn" checked style="width:20px; height:20px;">
+                        Respawn imediato após morte
+                    </label>
+                </div>
+            </div>
+
+            <div id="tab-matrix" class="tab-panel hidden">
+                <div class="menu-group">
+                    <label>Matrix (Solo)</label>
+                    <p class="menu-helper">Sandbox solo sem inimigos por padrão. Ideal para testes de movimentação e armas.</p>
+                </div>
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-matrix-infinite-ammo" checked style="width:20px; height:20px;">
+                        Munição infinita
+                    </label>
+                </div>
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-matrix-show-ui" style="width:20px; height:20px;" checked>
+                        Manter HUD e dashboard ativos
+                    </label>
+                </div>
+            </div>
+
+            <div id="tab-matrix-ai" class="tab-panel hidden">
+                <div class="menu-group">
+                    <label>Matrix AI Builder</label>
+                    <p class="menu-helper">Construa via prompt de IA. Use esta aba para preparar o builder antes de entrar.</p>
+                </div>
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-matrix-ai-autospawn" checked style="width:20px; height:20px;">
+                        Carregar inventário de construção automaticamente
+                    </label>
+                </div>
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-matrix-ai-hints" style="width:20px; height:20px;" checked>
+                        Mostrar dicas rápidas do builder
+                    </label>
+                </div>
+            </div>
+
+            <div id="tab-studio" class="tab-panel hidden">
+                <div class="menu-group">
+                    <label>Studio (Construção)</label>
+                    <p class="menu-helper">Modo de construção livre com blocos e prefabs. Ideal para prototipar cenários.</p>
+                </div>
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-studio-flight" checked style="width:20px; height:20px;">
+                        Começar com voo livre habilitado
+                    </label>
+                </div>
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-studio-show-grid" style="width:20px; height:20px;" checked>
+                        Mostrar grade de referência no chão
+                    </label>
                 </div>
             </div>
 
@@ -270,12 +361,22 @@
                     <label>Multiplayer Server URL</label>
                     <input type="text" id="setting-mp-server" placeholder="wss://example.com/socket" />
                 </div>
-                <div class="menu-group" style="display:flex; gap:8px; align-items:center;">
-                    <div style="flex:1;">
-                        <label>Room Code</label>
+                <div class="menu-group">
+                    <label>Seed (opcional)</label>
+                    <input type="text" id="setting-mp-seed" placeholder="leave blank for random" />
+                </div>
+                <div class="menu-group checkbox-group">
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="setting-mp-fixed-spawn" style="width:20px; height:20px;">
+                        <span>Usar spawn fixo (debug minimap)</span>
+                    </label>
+                </div>
+                <div class="menu-group">
+                    <label>Room Code</label>
+                    <div class="input-with-btn">
                         <input type="text" id="setting-mp-room" placeholder="ABCDE" />
+                        <button id="mp-room-generate" class="btn-ghost">Generate</button>
                     </div>
-                    <button id="mp-room-generate" style="margin-top:22px;">Generate</button>
                 </div>
                 <div class="menu-group">
                     <label>Nickname</label>
@@ -285,9 +386,11 @@
                     <label>Player Color</label>
                     <input type="color" id="setting-mp-color" value="#29b6f6" />
                 </div>
-                <div class="menu-group" style="display:flex; align-items:center; gap:8px;">
-                    <input type="checkbox" id="setting-mp-zombies" style="width:20px; height:20px;" checked>
-                    <label for="setting-mp-zombies" style="margin:0; color:white;">Start with Zombies</label>
+                <div class="menu-group checkbox-group">
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="setting-mp-zombies" style="width:20px; height:20px;" checked>
+                        <span>Start with Zombies</span>
+                    </label>
                 </div>
             </div>
 
@@ -300,7 +403,7 @@
     <div id="mp-lobby" class="hidden" aria-label="Multiplayer Lobby" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:white; padding:12px 16px; border-radius:8px; font-family:Arial; text-align:center; z-index:10; min-width:240px;">
         <div id="mp-lobby-status">Waiting in lobby...</div>
         <div id="mp-lobby-countdown" style="font-size:18px; font-weight:bold; margin-top:6px;"></div>
-        <button id="mp-start-btn" class="hidden" style="margin-top:10px;">Start Match</button>
+        <button id="mp-start-btn" class="hidden primary-cta">Start Match</button>
     </div>
 
     <!-- Studio palette (global, not tied to touch controls) -->
