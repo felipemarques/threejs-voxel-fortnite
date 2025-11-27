@@ -68,6 +68,7 @@ export class HUD {
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         this.hoveredEnemy = null;
+        this.hoveredPlayer = null;
         this.currentOutlinedEnemy = null;
         this.hoverInfo = document.getElementById('hover-info');
         this.scopeOverlay = document.getElementById('scope-overlay');
@@ -76,6 +77,7 @@ export class HUD {
         this.minimapCtx = this.minimapCanvas ? this.minimapCanvas.getContext('2d') : null;
         this.minimapSize = this.minimapCanvas ? this.minimapCanvas.width : 180;
         this.mapSize = (world && world.mapSize) ? world.mapSize : 200;
+        this.multiplayer = null;
 
         // Mouse move listener for hover detection
         window.addEventListener('mousemove', (e) => {
@@ -291,6 +293,7 @@ export class HUD {
 
         // Hover info above crosshair
         let hoveredDistNum = null;
+        this.hoveredPlayer = null;
         // If mouse-based hover didn't find an enemy, try a center-screen raycast
         if (!this.hoveredEnemy && this.player && this.player.enemyManager && this.player.enemyManager.enemies.length > 0) {
             const allEnemyMeshes = [];
@@ -318,6 +321,30 @@ export class HUD {
                 }
             }
         }
+        // If still nothing, try to find a remote player under the crosshair
+        if (!this.hoveredEnemy && this.multiplayer && this.multiplayer.others && this.multiplayer.others.size > 0) {
+            const remoteMeshes = [];
+            this.multiplayer.others.forEach(m => {
+                if (!m) return;
+                if (m.isMesh) {
+                    remoteMeshes.push(m);
+                } else if (m.traverse) {
+                    m.traverse(child => { if (child.isMesh) remoteMeshes.push(child); });
+                }
+            });
+            if (remoteMeshes.length > 0) {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.player.camera);
+                const hits = this.raycaster.intersectObjects(remoteMeshes, true);
+                if (hits.length > 0) {
+                    let obj = hits[0].object;
+                    // walk up to find the root mesh that belongs to the remote player
+                    while (obj.parent && !obj.userData?.nick && !this.multiplayer.others.has(obj.userData?.gameId)) {
+                        obj = obj.parent;
+                    }
+                    this.hoveredPlayer = obj;
+                }
+            }
+        }
         if (this.hoverInfo) {
             if (this.hoveredEnemy) {
                 const mesh = this.hoveredEnemy.mesh ? this.hoveredEnemy.mesh : (this.hoveredEnemy.isMesh ? this.hoveredEnemy : null) || this.hoveredEnemy;
@@ -326,6 +353,18 @@ export class HUD {
                 hoveredDistNum = enemyPos ? this.player.position.distanceTo(enemyPos) : null;
                 const dist = hoveredDistNum ? hoveredDistNum.toFixed(2) : '---';
                 this.hoverInfo.innerText = `${id} • ${dist}m`;
+            } else if (this.hoveredPlayer) {
+                const nick = (this.hoveredPlayer.userData && this.hoveredPlayer.userData.nick) ? this.hoveredPlayer.userData.nick : 'Player';
+                let targetPos = null;
+                if (this.hoveredPlayer.getWorldPosition) {
+                    targetPos = new THREE.Vector3();
+                    this.hoveredPlayer.getWorldPosition(targetPos);
+                } else {
+                    targetPos = this.hoveredPlayer.position || null;
+                }
+                hoveredDistNum = targetPos ? this.player.position.distanceTo(targetPos) : null;
+                const dist = hoveredDistNum ? hoveredDistNum.toFixed(2) : '---';
+                this.hoverInfo.innerText = `${nick} • ${dist}m`;
             } else {
                 this.hoverInfo.innerText = '';
             }
@@ -628,6 +667,23 @@ export class HUD {
         ctx.fill();
         ctx.stroke();
 
+        // Remote multiplayer players
+        if (this.multiplayer && this.multiplayer.others && this.multiplayer.others.size > 0) {
+            this.multiplayer.others.forEach(mesh => {
+                if (!mesh || !mesh.position) return;
+                const mx = Math.max(cx - radius, Math.min(cx + radius, cx + (mesh.position.x / half) * radius));
+                const mz = Math.max(cz - radius, Math.min(cz + radius, cz - (mesh.position.z / half) * radius));
+                const color = (mesh.userData && mesh.userData.color) ? mesh.userData.color : '#ffaa00';
+                ctx.beginPath();
+                ctx.fillStyle = color;
+                ctx.strokeStyle = '#111';
+                ctx.lineWidth = 2;
+                ctx.arc(mx, mz, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+        }
+
         // Player heading arrow
         try {
             const forward = new THREE.Vector3();
@@ -665,5 +721,9 @@ export class HUD {
 
     setRenderer(renderer) {
         this._renderer = renderer;
+    }
+
+    setMultiplayer(multiplayer) {
+        this.multiplayer = multiplayer;
     }
 }

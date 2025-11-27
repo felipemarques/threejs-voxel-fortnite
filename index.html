@@ -227,6 +227,13 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-fullscreen" style="width:20px; height:20px;">
+                        Start in Fullscreen (desktop & supported mobile)
+                    </label>
+                </div>
                 
                 <div class="menu-group">
                     <label>Background Music</label>
@@ -262,6 +269,13 @@
                     <label>Multiplayer Server URL</label>
                     <input type="text" id="setting-mp-server" placeholder="wss://example.com/socket" />
                 </div>
+                <div class="menu-group" style="display:flex; gap:8px; align-items:center;">
+                    <div style="flex:1;">
+                        <label>Room Code</label>
+                        <input type="text" id="setting-mp-room" placeholder="ABCDE" />
+                    </div>
+                    <button id="mp-room-generate" style="margin-top:22px;">Generate</button>
+                </div>
                 <div class="menu-group">
                     <label>Nickname</label>
                     <input type="text" id="setting-mp-nickname" placeholder="Player123" />
@@ -278,6 +292,12 @@
     </div>
 
     <script type="module" src="/src/main.js"></script>
+
+    <div id="mp-lobby" class="hidden" aria-label="Multiplayer Lobby" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:white; padding:12px 16px; border-radius:8px; font-family:Arial; text-align:center; z-index:10; min-width:240px;">
+        <div id="mp-lobby-status">Waiting in lobby...</div>
+        <div id="mp-lobby-countdown" style="font-size:18px; font-weight:bold; margin-top:6px;"></div>
+        <button id="mp-start-btn" class="hidden" style="margin-top:10px;">Start Match</button>
+    </div>
 
     <!-- Studio palette (global, not tied to touch controls) -->
         <div id="studio-palette" class="hidden" aria-label="Studio Palette">

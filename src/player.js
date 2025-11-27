@@ -336,12 +336,14 @@ export class Player {
         armGeo.translate(0, -0.3, 0); // Shift geometry down so origin is at shoulder
 
         this.leftArmPivot = new THREE.Group();
+        this.leftArmPivot.name = 'leftArmPivot';
         this.leftArmPivot.position.set(-0.45, 1.4, 0);
         this.mesh.add(this.leftArmPivot);
         const leftArm = new THREE.Mesh(armGeo, skinMat);
         this.leftArmPivot.add(leftArm);
 
         this.rightArmPivot = new THREE.Group();
+        this.rightArmPivot.name = 'rightArmPivot';
         this.rightArmPivot.position.set(0.45, 1.4, 0);
         this.mesh.add(this.rightArmPivot);
         const rightArm = new THREE.Mesh(armGeo, skinMat);
@@ -435,12 +437,14 @@ export class Player {
         legGeo.translate(0, -0.4, 0); // Shift geometry down so origin is at hip
 
         this.leftLegPivot = new THREE.Group();
+        this.leftLegPivot.name = 'leftLegPivot';
         this.leftLegPivot.position.set(-0.15, 0.7, 0);
         this.mesh.add(this.leftLegPivot);
         const leftLeg = new THREE.Mesh(legGeo, pantsMat);
         this.leftLegPivot.add(leftLeg);
 
         this.rightLegPivot = new THREE.Group();
+        this.rightLegPivot.name = 'rightLegPivot';
         this.rightLegPivot.position.set(0.15, 0.7, 0);
         this.mesh.add(this.rightLegPivot);
         const rightLeg = new THREE.Mesh(legGeo, pantsMat);
@@ -830,6 +834,10 @@ export class Player {
         this.enemyManager = enemyManager;
     }
 
+    setMultiplayerClient(mpClient) {
+        this.multiplayerClient = mpClient;
+    }
+
     shoot() {
         // Allow shooting when pointer lock is active OR when touch controls enabled
         const canShoot = (this.controls && this.controls.isLocked === true) || this.allowTouchMovement === true;
@@ -940,6 +948,30 @@ export class Player {
                             // Out of range: treat as miss
                             hitSomething = false;
                         }
+                    }
+                }
+            }
+        }
+
+        // Check remote multiplayer players if present
+        if (this.multiplayerClient && this.multiplayerClient.others && this.multiplayerClient.others.size > 0) {
+            const remoteMeshes = Array.from(this.multiplayerClient.others.values());
+            const intersects = raycaster.intersectObjects(remoteMeshes, true);
+            if (intersects.length > 0) {
+                const hitPoint = intersects[0].point;
+                const distanceToPlayer = bulletStart.distanceTo(hitPoint);
+                const distanceToWorld = bulletStart.distanceTo(bulletEnd);
+                if (distanceToPlayer < distanceToWorld) {
+                    bulletEnd = hitPoint.clone();
+                    hitSomething = true;
+                    // Resolve target root mesh with gameId
+                    let obj = intersects[0].object;
+                    while (obj && !obj.userData?.gameId && obj.parent) {
+                        obj = obj.parent;
+                    }
+                    const targetId = obj && obj.userData ? obj.userData.gameId : null;
+                    if (targetId && this.multiplayerClient && typeof this.multiplayerClient.sendHit === 'function') {
+                        this.multiplayerClient.sendHit(targetId, weapon.damage);
                     }
                 }
             }

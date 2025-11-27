@@ -14,6 +14,7 @@ export class EnemyManager {
         this.groanBuffer = null;
         
         const count = (settings && (settings.gameMode === 'matrix' || settings.gameMode === 'studio')) ? 0 : (settings && settings.gameMode === 'matrix-ai' ? 5 : (settings ? settings.enemyCount : 15));
+        this.targetCount = count;
         this.difficulty = settings ? settings.difficulty : 'medium';
         this.gameMode = settings && settings.gameMode ? settings.gameMode : 'survival';
         this.studioAiEnabled = false;
@@ -89,6 +90,12 @@ export class EnemyManager {
         }
     }
 
+    setTargetCount(count) {
+        if (typeof count === 'number' && count >= 0) {
+            this.targetCount = count;
+        }
+    }
+
     update(dt) {
         if (this.gameMode === 'matrix') return;
         if (this.gameMode === 'studio' && !this.studioAiEnabled) return;
@@ -116,6 +123,13 @@ export class EnemyManager {
             }
             return true;
         });
+
+        if (this.targetCount !== undefined && this.targetCount > 0) {
+            const deficit = this.targetCount - this.enemies.length;
+            if (deficit > 0) {
+                for (let i = 0; i < deficit; i++) this.spawnEnemy();
+            }
+        }
     }
 }
 
