@@ -12,7 +12,7 @@ export class MultiplayerClient {
         this.id = null;
         this.others = new Map(); // id -> mesh
         this.lastSend = 0;
-        this.sendInterval = 0.1; // seconds
+        this.sendInterval = 0.05; // seconds (20 Hz)
         this.lastSentPos = null;
         this.lastAnimSig = null;
         this.heartbeatTimer = 0;
@@ -21,6 +21,22 @@ export class MultiplayerClient {
         this._manualClose = false;
         this.deadPeers = new Set();
         this.matchLive = false;
+        this.remoteStates = new Map(); // id -> [{ t, pos, anim, nick, color }]
+        this.interpDelayMs = 100;
+        this.maxBufferMs = 1000;
+        this.maxExtrapMs = 80;
+        this._now = (typeof performance !== 'undefined' && performance.now.bind(performance)) || Date.now;
+        this._tmpVec = new THREE.Vector3();
+        this.netStats = {
+            txBytes: 0,
+            rxBytes: 0,
+            txPerSec: 0,
+            rxPerSec: 0,
+            lastSample: this._now(),
+            history: [] // [{ t, tx, rx, ping }]
+        };
+        this.lastPingSent = 0;
+        this.pingInterval = 5;
         this.connect();
     }
 
@@ -83,7 +99,9 @@ export class MultiplayerClient {
 
     handleMessage(ev) {
         try {
+            const receiveSize = typeof ev.data === 'string' ? ev.data.length : 0;
             const data = JSON.parse(ev.data);
+            if (receiveSize > 0) this.trackRx(receiveSize);
             if (data.type === 'hello') {
                 // wait for join response
             } else if (data.type === 'welcome') {
@@ -105,13 +123,16 @@ export class MultiplayerClient {
             } else if (data.type === 'state' && data.id !== this.id) {
                 if (this.deadPeers.has(data.id)) return; // ignore updates from dead peers
                 const mesh = this.ensureRemote(data.id, data.color);
-                if (mesh && data.pos) {
-                    if (data.color && mesh.userData?.color !== data.color) {
-                        this.applyColorToTorso(mesh, data.color);
-                    }
-                    mesh.position.set(data.pos.x, data.pos.y, data.pos.z);
-                    this.applyRemoteAnimation(mesh, data.anim);
-                    this.updateLabel(mesh, data.nick);
+                const snapTime = typeof data.ts === 'number' ? data.ts : this._now();
+                this.bufferRemoteState(data.id, {
+                    t: snapTime,
+                    pos: data.pos,
+                    anim: data.anim,
+                    nick: data.nick,
+                    color: data.color
+                });
+                if (mesh && data.color && mesh.userData?.color !== data.color) {
+                    this.applyColorToTorso(mesh, data.color);
                 }
             } else if (data.type === 'hit') {
                 if (this.onHit) {
@@ -134,6 +155,9 @@ export class MultiplayerClient {
                     this.killRemote(data.id);
                     if (this.onPeerDeath) this.onPeerDeath(data.id);
                 }
+            } else if (data.type === 'pong' && typeof data.ts === 'number') {
+                const rtt = this._now() - data.ts;
+                this.netStats.lastPing = rtt;
             }
         } catch (e) {
             console.warn('Multiplayer parse error:', e);
@@ -179,6 +203,7 @@ export class MultiplayerClient {
             try { this.scene.remove(mesh); } catch (e) {}
             this.others.delete(id);
         }
+        this.remoteStates.delete(id);
     }
 
     killRemote(id) {
@@ -256,9 +281,20 @@ export class MultiplayerClient {
     }
 
     update(dt) {
+        // Apply remote smoothing even if we skip sending this frame
+        this.updateRemoteInterpolation();
+        this.sampleNetRates();
+
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
         this.lastSend += dt;
         this.heartbeatTimer += dt;
+        if (this.player && !this.player.isDead) {
+            this.lastPingSent += dt;
+            if (this.lastPingSent >= this.pingInterval) {
+                this.sendPing();
+                this.lastPingSent = 0;
+            }
+        }
         if (this.lastSend < this.sendInterval) return;
         this.lastSend = 0;
         if (!this.player || !this.player.mesh) return;
@@ -274,7 +310,7 @@ export class MultiplayerClient {
                 rightX: this.player.rightLegPivot ? this.player.rightLegPivot.rotation.x : 0
             }
         };
-        const payload = { type: 'state', pos: { x: pos.x, y: pos.y, z: pos.z }, nick: this.nick, color: this.color, anim };
+        const payload = { type: 'state', pos: { x: pos.x, y: pos.y, z: pos.z }, nick: this.nick, color: this.color, anim, ts: this._now() };
 
         // Only send if something meaningful changed, or as a heartbeat every few seconds
         let moved = false;
@@ -292,7 +328,9 @@ export class MultiplayerClient {
         const heartbeatDue = this.heartbeatTimer >= 5;
 
         if (moved || animChanged || heartbeatDue) {
-            try { this.socket.send(JSON.stringify(payload)); } catch (e) {}
+            const msg = JSON.stringify(payload);
+            try { this.socket.send(msg); } catch (e) {}
+            this.trackTx(msg.length);
             this.lastSentPos = { x: pos.x, y: pos.y, z: pos.z };
             this.lastAnimSig = animSig;
             if (heartbeatDue) this.heartbeatTimer = 0;
@@ -326,7 +364,9 @@ export class MultiplayerClient {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
         if (!targetId || typeof amount !== 'number') return;
         const payload = { type: 'hit', targetId, amount };
-        try { this.socket.send(JSON.stringify(payload)); } catch (e) {}
+        const msg = JSON.stringify(payload);
+        try { this.socket.send(msg); } catch (e) {}
+        this.trackTx(msg.length);
     }
 
     getPeerCount() {
@@ -336,25 +376,39 @@ export class MultiplayerClient {
     sendJoin() {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
         try {
-            this.socket.send(JSON.stringify({ type: 'join', room: this.roomCode, nick: this.nick, color: this.color }));
+            const msg = JSON.stringify({ type: 'join', room: this.roomCode, nick: this.nick, color: this.color });
+            this.socket.send(msg);
+            this.trackTx(msg.length);
         } catch (e) {}
     }
 
     sendStart() {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-        try { this.socket.send(JSON.stringify({ type: 'start' })); } catch (e) {}
+        try {
+            const msg = JSON.stringify({ type: 'start' });
+            this.socket.send(msg);
+            this.trackTx(msg.length);
+        } catch (e) {}
     }
 
     sendSettings(settings) {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
         if (!this.isHost || !settings) return;
-        try { this.socket.send(JSON.stringify({ type: 'settings', settings })); } catch (e) {}
+        try {
+            const msg = JSON.stringify({ type: 'settings', settings });
+            this.socket.send(msg);
+            this.trackTx(msg.length);
+        } catch (e) {}
     }
 
     sendDeath() {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
         if (!this.id) return;
-        try { this.socket.send(JSON.stringify({ type: 'player-dead', id: this.id })); } catch (e) {}
+        try {
+            const msg = JSON.stringify({ type: 'player-dead', id: this.id });
+            this.socket.send(msg);
+            this.trackTx(msg.length);
+        } catch (e) {}
     }
 
     isMatchLive() {
@@ -364,5 +418,142 @@ export class MultiplayerClient {
     resetMatchState() {
         this.deadPeers.clear();
         this.matchLive = false;
+    }
+
+    bufferRemoteState(id, state) {
+        if (!id || !state) return;
+        const arr = this.remoteStates.get(id) || [];
+        arr.push(state);
+        while (arr.length > 24) arr.shift();
+        this.remoteStates.set(id, arr);
+    }
+
+    updateRemoteInterpolation() {
+        if (!this.remoteStates || this.remoteStates.size === 0) return;
+        const now = this._now();
+        const target = now - this.interpDelayMs;
+        this.remoteStates.forEach((states, id) => {
+            if (!states || states.length === 0) return;
+            const mesh = this.others.get(id);
+            if (!mesh) return;
+            // Drop very old samples
+            while (states.length > 2 && (target - states[0].t) > this.maxBufferMs) {
+                states.shift();
+            }
+
+            const latest = states[states.length - 1];
+            let a = states[0];
+            let b = latest;
+
+            for (let i = 1; i < states.length; i++) {
+                if (states[i].t >= target) {
+                    a = states[i - 1] || states[i];
+                    b = states[i];
+                    break;
+                }
+            }
+
+            const span = (b.t - a.t);
+            let alpha = span > 0 ? (target - a.t) / span : 1;
+
+            // If we're past the newest sample, allow a tiny extrapolation window
+            if (target > latest.t && (target - latest.t) <= this.maxExtrapMs && states.length >= 2) {
+                const prev = states[states.length - 2];
+                const dt = Math.max(1, latest.t - prev.t);
+                const vx = (latest.pos.x - prev.pos.x) / dt;
+                const vy = (latest.pos.y - prev.pos.y) / dt;
+                const vz = (latest.pos.z - prev.pos.z) / dt;
+                const lookahead = target - latest.t;
+                this._tmpVec.set(
+                    latest.pos.x + vx * lookahead,
+                    latest.pos.y + vy * lookahead,
+                    latest.pos.z + vz * lookahead
+                );
+                mesh.position.copy(this._tmpVec);
+                this.applyRemoteAnimation(mesh, latest.anim);
+                this.updateLabel(mesh, latest.nick);
+                return;
+            }
+
+            alpha = Math.min(1, Math.max(0, alpha));
+
+            // Interpolate position
+            const px = a.pos?.x ?? 0;
+            const py = a.pos?.y ?? 0;
+            const pz = a.pos?.z ?? 0;
+            const qx = b.pos?.x ?? px;
+            const qy = b.pos?.y ?? py;
+            const qz = b.pos?.z ?? pz;
+            this._tmpVec.set(
+                px + (qx - px) * alpha,
+                py + (qy - py) * alpha,
+                pz + (qz - pz) * alpha
+            );
+            mesh.position.copy(this._tmpVec);
+
+            // Interpolate simple limb rotations
+            const lerpVal = (x1, x2) => {
+                if (typeof x1 !== 'number') x1 = 0;
+                if (typeof x2 !== 'number') x2 = x1;
+                return x1 + (x2 - x1) * alpha;
+            };
+            const animA = a.anim || {};
+            const animB = b.anim || {};
+            const anim = {
+                arms: {
+                    leftX: lerpVal(animA?.arms?.leftX, animB?.arms?.leftX),
+                    rightX: lerpVal(animA?.arms?.rightX, animB?.arms?.rightX)
+                },
+                legs: {
+                    leftX: lerpVal(animA?.legs?.leftX, animB?.legs?.leftX),
+                    rightX: lerpVal(animA?.legs?.rightX, animB?.legs?.rightX)
+                }
+            };
+            this.applyRemoteAnimation(mesh, anim);
+            this.updateLabel(mesh, b.nick || a.nick);
+        });
+    }
+
+    sendPing() {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+        const payload = { type: 'ping', ts: this._now() };
+        const msg = JSON.stringify(payload);
+        try { this.socket.send(msg); } catch (e) {}
+        this.trackTx(msg.length);
+    }
+
+    trackTx(bytes) {
+        if (!bytes || bytes <= 0) return;
+        this.netStats.txBytes += bytes;
+    }
+
+    trackRx(bytes) {
+        if (!bytes || bytes <= 0) return;
+        this.netStats.rxBytes += bytes;
+    }
+
+    sampleNetRates() {
+        const now = this._now();
+        const elapsed = now - this.netStats.lastSample;
+        if (elapsed < 1000) return;
+        const secs = elapsed / 1000;
+        const txRate = this.netStats.txBytes / secs;
+        const rxRate = this.netStats.rxBytes / secs;
+        this.netStats.txPerSec = txRate;
+        this.netStats.rxPerSec = rxRate;
+        this.netStats.history.push({
+            t: now,
+            tx: txRate,
+            rx: rxRate,
+            ping: this.netStats.lastPing || null
+        });
+        while (this.netStats.history.length > 60) this.netStats.history.shift();
+        this.netStats.txBytes = 0;
+        this.netStats.rxBytes = 0;
+        this.netStats.lastSample = now;
+    }
+
+    getNetStats() {
+        return this.netStats;
     }
 }

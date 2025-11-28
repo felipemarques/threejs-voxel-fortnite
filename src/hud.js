@@ -45,7 +45,12 @@ export class HUD {
         this.perfMem = document.getElementById('perf-mem');
         this.perfCpu = document.getElementById('perf-cpu');
         this.perfGpu = document.getElementById('perf-gpu');
+        this.netStatsText = document.getElementById('net-stats');
+        this.netChart = document.getElementById('net-chart');
+        this.netChartCtx = this.netChart ? this.netChart.getContext('2d') : null;
         this._renderer = null;
+        this.frameTimeAvg = 0;
+        this.gpuInfo = null;
 
         // Debug Elements
         this.debugInfo = document.getElementById('debug-info');
@@ -189,6 +194,7 @@ export class HUD {
         }
         const frameDeltaMs = now - this.lastFrameTime;
         this.lastFrameTime = now;
+        this.frameTimeAvg = this.frameTimeAvg === 0 ? frameDeltaMs : (this.frameTimeAvg * 0.9 + frameDeltaMs * 0.1);
 
         if (this.player.enemyManager) {
             this.enemyCount.innerText = this.player.enemyManager.enemies.length;
@@ -245,9 +251,11 @@ export class HUD {
             if (this.perfMem && performance.memory) {
                 this.perfMem.innerText = Math.round(performance.memory.usedJSHeapSize / 1048576);
             }
-            if (this.perfCpu) this.perfCpu.innerText = 'N/A';
-            if (this.perfGpu) this.perfGpu.innerText = 'N/A';
+            if (this.perfCpu) this.perfCpu.innerText = `${this.frameTimeAvg.toFixed(1)} ms`;
+            if (this.perfGpu) this.perfGpu.innerText = this.gpuInfo || 'Unsupported';
         }
+
+        this.updateNetPanel();
 
         // Stats
         this.healthBar.style.width = `${this.player.health}%`;
@@ -725,8 +733,76 @@ export class HUD {
         } catch (e) {}
     }
 
+    updateNetPanel() {
+        if (!this.netStatsText && !this.netChartCtx) return;
+        const stats = (this.multiplayer && typeof this.multiplayer.getNetStats === 'function') ? this.multiplayer.getNetStats() : null;
+        if (!stats) {
+            if (this.netStatsText) this.netStatsText.innerText = 'offline';
+            if (this.netChartCtx) this.netChartCtx.clearRect(0, 0, this.netChart.width, this.netChart.height);
+            return;
+        }
+        const txKbps = (stats.txPerSec || 0) / 1024;
+        const rxKbps = (stats.rxPerSec || 0) / 1024;
+        const pingText = (typeof stats.lastPing === 'number') ? `${Math.max(0, stats.lastPing).toFixed(0)} ms` : '--';
+        if (this.netStatsText) {
+            this.netStatsText.innerText = `↑ ${txKbps.toFixed(1)} kbps ↓ ${rxKbps.toFixed(1)} kbps • ping ${pingText}`;
+        }
+        if (!this.netChartCtx || !this.netChart) return;
+        const ctx = this.netChartCtx;
+        const w = this.netChart.width;
+        const h = this.netChart.height;
+        const history = Array.isArray(stats.history) ? stats.history : [];
+        ctx.clearRect(0, 0, w, h);
+        if (!history.length) return;
+        const maxKbps = history.reduce((m, s) => Math.max(m, Math.max(s.tx || 0, s.rx || 0) / 1024), 1);
+        const pad = 2;
+        const len = history.length;
+        const toX = (i) => {
+            if (len <= 1) return pad;
+            return pad + (i / (len - 1)) * (w - pad * 2);
+        };
+        const toY = (val) => {
+            const norm = Math.max(0, Math.min(1, (val / 1024) / maxKbps));
+            return h - pad - norm * (h - pad * 2);
+        };
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.beginPath();
+        ctx.moveTo(pad, h - pad);
+        ctx.lineTo(w - pad, h - pad);
+        ctx.stroke();
+
+        const drawLine = (color, accessor) => {
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            history.forEach((s, idx) => {
+                const x = toX(idx);
+                const y = toY(accessor(s) || 0);
+                if (idx === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        };
+
+        drawLine('rgba(0, 210, 255, 0.85)', (s) => s.rx || 0);
+        drawLine('rgba(255, 150, 50, 0.85)', (s) => s.tx || 0);
+    }
+
+    initGpuInfo() {
+        if (!this._renderer || this.gpuInfo) return;
+        try {
+            const gl = this._renderer.getContext();
+            const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+            const name = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+            this.gpuInfo = name || 'Unknown GPU';
+        } catch (e) {
+            this.gpuInfo = 'Unknown GPU';
+        }
+    }
+
     setRenderer(renderer) {
         this._renderer = renderer;
+        this.initGpuInfo();
     }
 
     setMultiplayer(multiplayer) {

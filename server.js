@@ -42,6 +42,11 @@ wss.on('connection', (ws) => {
       const entry = clients.get(id);
       if (!entry) return;
 
+      if (data.type === 'ping' && typeof data.ts === 'number') {
+        try { ws.send(JSON.stringify({ type: 'pong', ts: data.ts })); } catch (e) {}
+        return;
+      }
+
       if (data.type === 'join' && data.room) {
         // Leave previous room if any
         if (entry.room && rooms.has(entry.room)) {
