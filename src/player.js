@@ -47,8 +47,14 @@ export class Player {
         this.isSprinting = false;
         this.canJump = false;
         this.speed = 42.0; // base walking speed (~15 km/h)
-        this.jumpHeight = 30.0;
-        this.gravity = 250.0;
+        // Tuned for a ~2 m jump apex and ~0.5 s hang time (more realistic feel)
+        this.jumpHeight = 16.0;
+        this.gravity = 65.0;
+        this.mouthStyle = (settings && settings.mouthStyle) ? settings.mouthStyle : 'serious';
+        this.mouthMesh = null;
+        this.mouthStyles = ['serious', 'smile', 'angry', 'surprised', 'none'];
+        this.showHat = (settings && typeof settings.showHat !== 'undefined') ? settings.showHat : true;
+        this.hatMeshes = [];
 
         // Distance tracking
         this.distanceTraveled = 0; // in meters
@@ -305,17 +311,25 @@ export class Player {
         // Head
         this.head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skinMat);
         this.head.position.y = 1.75;
+        this.head.name = 'playerHead';
+        this.head.userData = { role: 'playerHead' };
         this.mesh.add(this.head);
         
         // Cap (Baseball cap style)
         const capMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c }); // Red cap
         const capTop = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.1, 0.52), capMat);
         capTop.position.set(0, 0.3, 0);
+        capTop.userData = { role: 'playerHat' };
+        capTop.name = 'playerHatCap';
         this.head.add(capTop);
         
         const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.02, 0.35), capMat);
         capBrim.position.set(0, 0.22, 0.35);
+        capBrim.userData = { role: 'playerHat' };
+        capBrim.name = 'playerHatBrim';
         this.head.add(capBrim);
+        this.hatMeshes = [capTop, capBrim];
+        this.setHatVisible(this.showHat);
         
         // Sunglasses
         const glassesMat = new THREE.MeshStandardMaterial({ color: 0x000000 }); // Black frames
@@ -350,6 +364,9 @@ export class Player {
         const glassRightArm = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.3), glassesMat);
         glassRightArm.position.set(0.21, 0.05, 0.1);
         this.head.add(glassRightArm);
+
+        // Mouth
+        this.createMouth(this.mouthStyle);
 
         // Body
         const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), material);
@@ -705,6 +722,24 @@ export class Player {
         document.addEventListener('mouseup', onMouseUp);
         // Prevent context menu
         document.addEventListener('contextmenu', event => event.preventDefault());
+
+        // Click head to cycle mouth when pointer is free (avoids interfering with shooting)
+        this._mouthRaycaster = new THREE.Raycaster();
+        document.addEventListener('pointerdown', (ev) => {
+            try {
+                if (this.controls && this.controls.isLocked) return; // only when not locked
+                if (!this.head || !this.camera) return;
+                const x = (ev.clientX / window.innerWidth) * 2 - 1;
+                const y = -(ev.clientY / window.innerHeight) * 2 + 1;
+                this._mouthRaycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
+                const hits = this._mouthRaycaster.intersectObject(this.head, true);
+                if (hits && hits.length > 0) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    this.cycleMouthStyle();
+                }
+            } catch (e) {}
+        });
     }
 
     lockControls() {
@@ -968,7 +1003,25 @@ export class Player {
                         const distEnemy = bulletStart.distanceTo(enemy.position);
                         const weaponRange = weapon.range || 1000;
                         if (distEnemy <= weaponRange) {
-                            enemy.takeDamage(weapon.damage);
+                            const dmg = weapon.damage;
+                            if (this.multiplayerClient && this.player && this.player.gameMode === 'multiplayer') {
+                                const isHost = this.multiplayerClient.isHost;
+                                const id = enemy.mesh && enemy.mesh.userData ? enemy.mesh.userData.gameId : null;
+                                if (id) {
+                                    if (isHost) {
+                                        enemy.takeDamage(dmg);
+                                        if (typeof this.multiplayerClient.sendZombieState === 'function') {
+                                            this.multiplayerClient.sendZombieState(id, enemy.health);
+                                        }
+                                    } else {
+                                        if (typeof this.multiplayerClient.sendZombieHit === 'function') {
+                                            this.multiplayerClient.sendZombieHit(id, dmg);
+                                        }
+                                    }
+                                }
+                            } else {
+                                enemy.takeDamage(weapon.damage);
+                            }
                         } else {
                             // Out of range: treat as miss
                             hitSomething = false;
@@ -1011,6 +1064,95 @@ export class Player {
         if (hitSomething && weapon.name === 'Sniper') {
             this.createImpactSmoke(bulletEnd);
         }
+    }
+
+    static buildMouthMesh(style) {
+        const s = (style || 'serious').toLowerCase();
+        const matBase = new THREE.MeshStandardMaterial({ color: 0x2b1b10, roughness: 0.6, metalness: 0 });
+        let mesh = null;
+        if (s === 'smile') {
+            const group = new THREE.Group();
+            group.userData = { role: 'playerMouth' };
+            group.name = 'playerMouth';
+            const segMat = matBase.clone();
+            const seg1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.02), segMat);
+            const seg2 = seg1.clone();
+            const seg3 = seg1.clone();
+            seg1.position.set(-0.1, -0.15, 0.26);
+            seg1.rotation.z = -0.2;
+            seg2.position.set(0, -0.16, 0.26);
+            seg3.position.set(0.1, -0.15, 0.26);
+            seg3.rotation.z = 0.2;
+            [seg1, seg2, seg3].forEach(seg => {
+                seg.userData = { role: 'playerMouth' };
+                seg.name = 'playerMouthSeg';
+            });
+            group.add(seg1, seg2, seg3);
+            mesh = group;
+        } else if (s === 'angry') {
+            const mat = new THREE.MeshStandardMaterial({ color: 0x5a0c0c, roughness: 0.4 });
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.02), mat);
+            mesh.position.set(0, -0.16, 0.26);
+            mesh.rotation.z = -0.18;
+            mesh.userData = { role: 'playerMouth' };
+        } else if (s === 'surprised') {
+            mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 20), matBase);
+            mesh.position.set(0, -0.14, 0.26);
+            mesh.rotation.x = Math.PI / 2;
+            mesh.userData = { role: 'playerMouth' };
+        } else if (s === 'none') {
+            return null;
+        } else {
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.02), matBase);
+            mesh.position.set(0, -0.16, 0.26);
+            mesh.userData = { role: 'playerMouth' };
+        }
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        mesh.name = 'playerMouth';
+        return mesh;
+    }
+
+    createMouth(style) {
+        if (!this.head) return;
+        if (this.mouthMesh) {
+            try { this.head.remove(this.mouthMesh); } catch (e) {}
+            this.mouthMesh = null;
+        }
+        const mouth = Player.buildMouthMesh(style);
+        if (!mouth) return;
+        this.head.add(mouth);
+        this.mouthMesh = mouth;
+    }
+
+    setHatVisible(visible) {
+        this.showHat = visible;
+        if (Array.isArray(this.hatMeshes)) {
+            this.hatMeshes.forEach(mesh => {
+                if (mesh) mesh.visible = visible;
+            });
+        }
+    }
+
+    cycleMouthStyle() {
+        const current = this.mouthStyle || 'serious';
+        const idx = this.mouthStyles.indexOf(current);
+        const next = this.mouthStyles[(idx + 1) % this.mouthStyles.length];
+        this.mouthStyle = next;
+        this.createMouth(next);
+        this.persistSetting('mouthStyle', next);
+        const select = document.getElementById('setting-mouth-style');
+        if (select) select.value = next;
+    }
+
+    persistSetting(key, value) {
+        if (typeof window === 'undefined' || !window.localStorage) return;
+        try {
+            const raw = window.localStorage.getItem('voxel-firecraft-settings');
+            const parsed = raw ? JSON.parse(raw) : {};
+            parsed[key] = value;
+            window.localStorage.setItem('voxel-firecraft-settings', JSON.stringify(parsed));
+        } catch (e) {}
     }
 
     createMuzzleFlash() {

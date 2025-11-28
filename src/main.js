@@ -54,6 +54,7 @@ class Game {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.BasicShadowMap;
         document.getElementById('game-container').appendChild(this.renderer.domElement);
+        this._renderScaleApplied = this.renderer.getPixelRatio();
         this.multiplayerDropTimer = 0;
         this.multiplayerDropCooldown = 0;
         this.multiplayerDropActive = false;
@@ -77,6 +78,7 @@ class Game {
         dirLight.shadow.mapSize.width = 1024;
         dirLight.shadow.mapSize.height = 1024;
         this.scene.add(dirLight);
+        this.dirLight = dirLight;
 
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -96,6 +98,10 @@ class Game {
         this.bgMusicVolume = 0.5;
         this._endSequenceAudio = null;
         this._prevBgVolume = null;
+        this.autoPerfEnabled = false;
+        this._autoPerfTimer = 0;
+        this._renderScaleApplied = 1;
+        this.sfxVolume = 0.7;
         // ESC key to toggle pause
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Escape') {
@@ -114,12 +120,33 @@ class Game {
         // Setup Menu
         this.setupMenu();
         this.setupLongPressMenu();
+        // Start with menu open so HUD elements (hotbar) stay hidden until play
+        this.setMenuOpenState(true);
 
         // Soften pointer lock errors in environments that reject the request (e.g. ESC before completion)
         document.addEventListener('pointerlockerror', (ev) => {
             ev.preventDefault && ev.preventDefault();
             console.warn('Pointer lock request failed or was cancelled.');
         });
+    }
+
+    applyGraphicsSettings(settings = {}) {
+        if (!this.renderer) return;
+        const perfMode = !!settings.performanceMode;
+        const scale = Math.max(0.5, Math.min(1, (settings.renderScale || 100) / 100));
+        const maxPixelRatio = IS_MOBILE ? 1.0 : (perfMode ? 1.25 : 1.5);
+        const targetRatio = Math.min((window.devicePixelRatio || 1) * scale, maxPixelRatio);
+        this.renderer.setPixelRatio(targetRatio);
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+
+        const shadowsEnabled = !perfMode;
+        this.renderer.shadowMap.enabled = shadowsEnabled;
+        if (this.dirLight && this.dirLight.shadow) {
+            this.dirLight.castShadow = shadowsEnabled;
+            const size = perfMode ? 512 : 1024;
+            this.dirLight.shadow.mapSize.width = size;
+            this.dirLight.shadow.mapSize.height = size;
+        }
     }
 
     applyDeterministicRandom(seed) {
@@ -257,10 +284,15 @@ class Game {
         lobbyStatus.innerText = `Waiting in lobby (Room: ${roomCode})`;
         lobbyBtn.classList.toggle('hidden', !(this.multiplayer && this.multiplayer.isHost));
         lobbyBtn.onclick = () => {
-            if (this.multiplayer && this.multiplayer.isHost) {
-                this.beginLobbyCountdown(10);
-                this.multiplayer.sendStart();
+            if (!this.multiplayer || !this.multiplayer.isHost) return;
+            const peers = (typeof this.multiplayer.getPeerCount === 'function') ? Math.max(0, this.multiplayer.getPeerCount() - 1) : 0;
+            const zombieCount = this.enemyManager ? (typeof this.enemyManager.targetCount === 'number' ? this.enemyManager.targetCount : (this.enemyManager.enemies ? this.enemyManager.enemies.length : 0)) : 0;
+            if (peers <= 0 && zombieCount <= 0) {
+                alert('Need at least 1 remote player or 1 NPC zombie before starting the match.');
+                return;
             }
+            this.beginLobbyCountdown(10);
+            this.multiplayer.sendStart();
         };
         this.lobbyCountdown = 0;
         this.updateLobbyUI(this.multiplayer ? this.multiplayer.isHost : false);
@@ -323,7 +355,15 @@ class Game {
         const minimapCheckbox = document.getElementById('setting-minimap');
         const volumeSlider = document.getElementById('setting-music-volume');
         const volumeVal = document.getElementById('setting-music-volume-val');
+        const sfxVolumeSlider = document.getElementById('setting-sfx-volume');
+        const sfxVolumeVal = document.getElementById('setting-sfx-volume-val');
         const cameraSelect = document.getElementById('setting-camera');
+        const mouthStyleSelect = document.getElementById('setting-mouth-style');
+        const showHatCheckbox = document.getElementById('setting-show-hat');
+        const perfModeCheckbox = document.getElementById('setting-performance-mode');
+        const autoPerfCheckbox = document.getElementById('setting-auto-performance');
+        const renderScaleInput = document.getElementById('setting-render-scale');
+        const renderScaleVal = document.getElementById('render-scale-val');
         const touchCheckbox = document.getElementById('setting-touch-controls');
         const fullscreenCheckbox = document.getElementById('setting-fullscreen');
         const gameModeSelect = document.getElementById('setting-game-mode');
@@ -355,6 +395,8 @@ class Game {
         const matrixAiHintsCheckbox = document.getElementById('setting-matrix-ai-hints');
         const studioFlightCheckbox = document.getElementById('setting-studio-flight');
         const studioShowGridCheckbox = document.getElementById('setting-studio-show-grid');
+        const dashToggle = document.getElementById('dash-toggle');
+        const perfToggle = document.getElementById('perf-toggle');
         
         const enemiesVal = document.getElementById('enemy-count-val');
         const stormVal = document.getElementById('storm-time-val');
@@ -366,6 +408,42 @@ class Game {
             inputEl.addEventListener('change', update);
             update();
         };
+        const bindScaleLabel = (inputEl, labelEl) => {
+            if (!inputEl || !labelEl) return;
+            const update = () => { labelEl.innerText = inputEl.value; };
+            inputEl.addEventListener('input', update);
+            inputEl.addEventListener('change', update);
+            update();
+        };
+        const persistSetting = (key, value) => {
+            if (typeof window === 'undefined' || !window.localStorage) return;
+            try {
+                const raw = window.localStorage.getItem('voxel-firecraft-settings');
+                const json = raw ? JSON.parse(raw) : {};
+                json[key] = value;
+                window.localStorage.setItem('voxel-firecraft-settings', JSON.stringify(json));
+            } catch (e) {}
+        };
+
+        const bindToggle = (btn, targetId) => {
+            if (!btn) return;
+            btn.addEventListener('pointerdown', (ev) => {
+                try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+            });
+            btn.addEventListener('click', (ev) => {
+                try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+                const target = document.getElementById(targetId);
+                if (!target) return;
+                const isCollapsed = target.classList.toggle('collapsed');
+                Array.from(target.children).forEach((child) => {
+                    if (child === btn) return;
+                    child.style.display = isCollapsed ? 'none' : '';
+                });
+                btn.innerText = isCollapsed ? '+' : '–';
+            });
+        };
+        bindToggle(dashToggle, 'dashboard');
+        bindToggle(perfToggle, 'perf-dashboard');
 
         // Load Settings
         const savedSettings = localStorage.getItem('voxel-firecraft-settings');
@@ -391,7 +469,22 @@ class Game {
                 volumeVal.innerText = v;
                 this.bgMusicVolume = v / 100;
             }
+            if (sfxVolumeSlider && sfxVolumeVal && s.sfxVolume !== undefined) {
+                const sv = parseInt(s.sfxVolume, 10);
+                sfxVolumeSlider.value = sv;
+                sfxVolumeVal.innerText = sv;
+                this.sfxVolume = sv / 100;
+            }
             if (s.cameraMode) cameraSelect.value = s.cameraMode;
+            if (mouthStyleSelect && s.mouthStyle) mouthStyleSelect.value = s.mouthStyle;
+            if (showHatCheckbox) showHatCheckbox.checked = s.showHat !== false;
+            if (perfModeCheckbox) perfModeCheckbox.checked = !!s.performanceMode;
+            if (autoPerfCheckbox) autoPerfCheckbox.checked = !!s.autoPerformance;
+            if (renderScaleInput && renderScaleVal) {
+                const rs = s.renderScale || 100;
+                renderScaleInput.value = rs;
+                renderScaleVal.innerText = rs;
+            }
             if (s.useTouchControls !== undefined && touchCheckbox) touchCheckbox.checked = !!s.useTouchControls;
             if (s.gameMode && gameModeSelect) gameModeSelect.value = s.gameMode;
             if (s.gameMode) this._selectedMode = s.gameMode;
@@ -425,6 +518,40 @@ class Game {
         bindRangeLabel(stormInput, stormVal);
         bindRangeLabel(mapSizeInput, mapSizeVal);
         bindRangeLabel(arenaTimeInput, arenaTimeVal);
+        bindRangeLabel(renderScaleInput, renderScaleVal);
+        bindRangeLabel(sfxVolumeSlider, sfxVolumeVal);
+        if (autoPerfCheckbox) {
+            autoPerfCheckbox.addEventListener('change', () => {
+                const settings = this.lastPlaySettings || {};
+                settings.autoPerformance = autoPerfCheckbox.checked;
+                this.autoPerfEnabled = settings.autoPerformance;
+                persistSetting('autoPerformance', settings.autoPerformance);
+            });
+        }
+        if (perfModeCheckbox) {
+            perfModeCheckbox.addEventListener('change', () => {
+                const settings = this.lastPlaySettings || {};
+                settings.performanceMode = perfModeCheckbox.checked;
+                this.applyGraphicsSettings(settings);
+                persistSetting('performanceMode', perfModeCheckbox.checked);
+            });
+        }
+        if (renderScaleInput) {
+            renderScaleInput.addEventListener('change', () => {
+                const settings = this.lastPlaySettings || {};
+                settings.renderScale = parseInt(renderScaleInput.value, 10);
+                this.applyGraphicsSettings(settings);
+                persistSetting('renderScale', settings.renderScale);
+            });
+        }
+        if (showHatCheckbox) {
+            showHatCheckbox.addEventListener('change', () => {
+                if (this.player && typeof this.player.setHatVisible === 'function') {
+                    this.player.setHatVisible(showHatCheckbox.checked);
+                }
+                persistSetting('showHat', showHatCheckbox.checked);
+            });
+        }
 
         playBtn.onclick = () => {
             const selectedMode = this._selectedMode || 'survival';
@@ -443,6 +570,12 @@ class Game {
                 musicVolume: volumeSlider ? parseInt(volumeSlider.value) : Math.round(this.bgMusicVolume * 100),
                 musicEnabled: document.getElementById('setting-music-enabled') ? document.getElementById('setting-music-enabled').checked : true,
                 cameraMode: cameraSelect.value,
+                mouthStyle: mouthStyleSelect ? mouthStyleSelect.value : 'serious',
+                showHat: showHatCheckbox ? showHatCheckbox.checked : true,
+                performanceMode: perfModeCheckbox ? perfModeCheckbox.checked : false,
+                autoPerformance: autoPerfCheckbox ? autoPerfCheckbox.checked : false,
+                renderScale: renderScaleInput ? parseInt(renderScaleInput.value, 10) : 100,
+                sfxVolume: sfxVolumeSlider ? parseInt(sfxVolumeSlider.value, 10) : 70,
                 language: languageSelect ? languageSelect.value : 'en',
                 useTouchControls: touchCheckbox ? touchCheckbox.checked : false,
                 fullscreen: fullscreenCheckbox ? fullscreenCheckbox.checked : false,
@@ -471,6 +604,7 @@ class Game {
             // Save Settings
             localStorage.setItem('voxel-firecraft-settings', JSON.stringify(settings));
             this.updateDebugToggleVisibility(settings.debugMode);
+            this.applyGraphicsSettings(settings);
             
             // Hide Menu
             menu.style.display = 'none';
@@ -514,6 +648,12 @@ class Game {
                         this.world.stormMesh.visible = canShowStorm;
                     } else if (canShowStorm && typeof this.world.createStormVisuals === 'function') {
                         this.world.createStormVisuals();
+                    }
+                }
+                if (this.player) {
+                    this.player.mouthStyle = settings.mouthStyle || 'serious';
+                    if (typeof this.player.createMouth === 'function') {
+                        this.player.createMouth(this.player.mouthStyle);
                     }
                 }
                 this.setHotbarVisible(true);
@@ -734,6 +874,9 @@ class Game {
         }
         this.multiplayerEnemyBaseCount = effectiveSettings.enemyCount || 0;
         this.player = new Player(this.camera, this.scene, null, effectiveSettings);
+        if (typeof settings.sfxVolume !== 'undefined') {
+            this.player.sfxVolume = Math.max(0, Math.min(1, settings.sfxVolume / 100));
+        }
         // Apply multiplayer color to local player mesh
         if (settings && settings.mpColor) {
             this.player.playerColor = settings.mpColor;
@@ -744,6 +887,12 @@ class Game {
                 } catch (e) {}
             }
             this.player.createPlayerMesh();
+        }
+        // Apply hat/mouth settings to local player mesh
+        if (this.player) {
+            this.player.setHatVisible(settings.showHat !== false);
+            this.player.mouthStyle = settings.mouthStyle || 'serious';
+            this.player.createMouth(this.player.mouthStyle);
         }
         if (effectiveSettings.gameMode === 'multiplayer') {
             this.matchPhase = 'lobby';
@@ -858,6 +1007,9 @@ class Game {
             this.hud.setMultiplayer(this.multiplayer);
         }
         this.enemyManager = new EnemyManager(this.scene, this.player, this.world, effectiveSettings);
+        if (this.multiplayer && typeof this.multiplayer.setEnemyManager === 'function') {
+            this.multiplayer.setEnemyManager(this.enemyManager);
+        }
         if (effectiveSettings.gameMode === 'multiplayer') {
             this.multiplayerEnemyBaseCount = effectiveSettings.enemyCount || 0;
             if (typeof this.enemyManager.setTargetCount === 'function') {
@@ -1487,13 +1639,13 @@ class Game {
             if (this.player && this.player.gameMode === 'multiplayer') {
                 if (this.matchPhase === 'live') {
                     this.multiplayerDropTimer += cappedDt;
-                    if (this.multiplayerDropTimer >= 60) {
+                    if (this.multiplayerDropTimer >= 30) {
                         this.multiplayerDropActive = true;
                     }
                     if (this.multiplayerDropActive && this.itemManager) {
                         this.multiplayerDropCooldown -= cappedDt;
                         if (this.multiplayerDropCooldown <= 0) {
-                            this.multiplayerDropCooldown = 8;
+                            this.multiplayerDropCooldown = 60;
                             if (typeof this.itemManager.spawnMatrixDropNearPlayer === 'function') {
                                 this.itemManager.spawnMatrixDropNearPlayer();
                             }

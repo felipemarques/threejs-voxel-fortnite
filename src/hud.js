@@ -45,12 +45,17 @@ export class HUD {
         this.perfMem = document.getElementById('perf-mem');
         this.perfCpu = document.getElementById('perf-cpu');
         this.perfGpu = document.getElementById('perf-gpu');
+        this.perfGpuMem = document.getElementById('perf-gpu-mem');
+        this.dashboardEl = document.getElementById('dashboard');
+        this.perfEl = document.getElementById('perf-dashboard');
         this.netStatsText = document.getElementById('net-stats');
         this.netChart = document.getElementById('net-chart');
         this.netChartCtx = this.netChart ? this.netChart.getContext('2d') : null;
         this._renderer = null;
         this.frameTimeAvg = 0;
         this.gpuInfo = null;
+        this.gpuMemInfo = null;
+        this._gl = null;
 
         // Debug Elements
         this.debugInfo = document.getElementById('debug-info');
@@ -232,6 +237,9 @@ export class HUD {
 
         // Performance dashboard
         if (this._renderer) {
+            if (this.isPerfCollapsed()) {
+                return;
+            }
             const info = this._renderer.info;
             if (this.perfFrame) this.perfFrame.innerText = frameDeltaMs.toFixed(1);
             if (this.perfCalls) this.perfCalls.innerText = info.render.calls;
@@ -253,6 +261,7 @@ export class HUD {
             }
             if (this.perfCpu) this.perfCpu.innerText = `${this.frameTimeAvg.toFixed(1)} ms`;
             if (this.perfGpu) this.perfGpu.innerText = this.gpuInfo || 'Unsupported';
+            this.updateGpuMemory();
         }
 
         this.updateNetPanel();
@@ -734,6 +743,7 @@ export class HUD {
     }
 
     updateNetPanel() {
+        if (this.isPerfCollapsed()) return;
         if (!this.netStatsText && !this.netChartCtx) return;
         const stats = (this.multiplayer && typeof this.multiplayer.getNetStats === 'function') ? this.multiplayer.getNetStats() : null;
         if (!stats) {
@@ -788,13 +798,60 @@ export class HUD {
         drawLine('rgba(255, 150, 50, 0.85)', (s) => s.tx || 0);
     }
 
+    updateGpuMemory() {
+        if (!this.perfGpuMem) return;
+        // If GPU extension unavailable, show JS heap like the example snippet (fallback)
+        if (!this.gpuMemInfo || !this._gl) {
+            if (performance.memory) {
+                const used = (performance.memory.usedJSHeapSize / 1048576).toFixed(1);
+                const limit = (performance.memory.jsHeapSizeLimit / 1048576).toFixed(0);
+                this.perfGpuMem.innerText = `${used} / ${limit} MB (heap)`;
+            } else {
+                this.perfGpuMem.innerText = 'Unsupported';
+            }
+            return;
+        }
+        const now = performance.now();
+        if (!this.gpuMemInfo.lastUpdate || now - this.gpuMemInfo.lastUpdate > 1000) {
+            try {
+                const avail = this._gl.getParameter(this.gpuMemInfo.ext.GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX);
+                this.gpuMemInfo.lastAvailKb = avail || this.gpuMemInfo.lastAvailKb;
+                this.gpuMemInfo.lastUpdate = now;
+            } catch (e) {}
+        }
+        const totalMb = this.gpuMemInfo.totalKb ? (this.gpuMemInfo.totalKb / 1024) : null;
+        const availMb = this.gpuMemInfo.lastAvailKb ? (this.gpuMemInfo.lastAvailKb / 1024) : null;
+        if (totalMb && availMb) {
+            const used = Math.max(0, totalMb - availMb);
+            this.perfGpuMem.innerText = `${used.toFixed(1)} / ${totalMb.toFixed(1)} MB`;
+        } else if (availMb) {
+            this.perfGpuMem.innerText = `${availMb.toFixed(1)} MB free`;
+        } else {
+            this.perfGpuMem.innerText = 'Unknown';
+        }
+    }
+
     initGpuInfo() {
         if (!this._renderer || this.gpuInfo) return;
         try {
             const gl = this._renderer.getContext();
+            this._gl = gl;
             const dbg = gl.getExtension('WEBGL_debug_renderer_info');
             const name = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
             this.gpuInfo = name || 'Unknown GPU';
+            const memExt = gl.getExtension('WEBGL_gpu_memory_info');
+            if (memExt) {
+                const totalKb = gl.getParameter(memExt.GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_KB) ||
+                    gl.getParameter(memExt.GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX) ||
+                    null;
+                const availKb = gl.getParameter(memExt.GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX) || null;
+                this.gpuMemInfo = {
+                    ext: memExt,
+                    totalKb,
+                    lastAvailKb: availKb,
+                    lastUpdate: 0
+                };
+            }
         } catch (e) {
             this.gpuInfo = 'Unknown GPU';
         }
@@ -807,5 +864,9 @@ export class HUD {
 
     setMultiplayer(multiplayer) {
         this.multiplayer = multiplayer;
+    }
+
+    isPerfCollapsed() {
+        return this.perfEl && this.perfEl.classList.contains('collapsed');
     }
 }

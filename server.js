@@ -65,8 +65,8 @@ wss.on('connection', (ws) => {
         if (!room.hostId || !room.clients.has(room.hostId)) {
           room.hostId = id;
         }
-        ws.send(JSON.stringify({ type: 'welcome', id, room: data.room, isHost: room.hostId === id, settings: room.settings || null }));
-        broadcastToRoom(data.room, { type: 'player-join', id });
+        ws.send(JSON.stringify({ type: 'welcome', id, room: data.room, isHost: room.hostId === id, settings: room.settings || null, custom: data.custom || null }));
+        broadcastToRoom(data.room, { type: 'player-join', id, custom: data.custom || null });
         logRoom(data.room, '[join]');
       }
 
@@ -75,7 +75,22 @@ wss.on('connection', (ws) => {
       if (!room) return;
 
       if (data.type === 'state' && data.pos) {
-        broadcastToRoom(entry.room, { type: 'state', id, pos: data.pos, nick: data.nick, color: data.color, anim: data.anim });
+        broadcastToRoom(entry.room, {
+          type: 'state',
+          id,
+          pos: data.pos,
+          rot: data.rot,
+          fwd: data.fwd,
+          nick: data.nick,
+          color: data.color,
+          anim: data.anim,
+          custom: data.custom || null,
+          ts: data.ts
+        });
+      } else if (data.type === 'zombie-hit' && data.id && typeof data.amount === 'number') {
+        broadcastToRoom(entry.room, { type: 'zombie-hit', id: data.id, amount: data.amount, from: id });
+      } else if (data.type === 'zombie-state' && data.id && typeof data.health === 'number') {
+        broadcastToRoom(entry.room, { type: 'zombie-state', id: data.id, health: data.health, from: id });
       } else if (data.type === 'hit' && data.targetId && typeof data.amount === 'number') {
         broadcastToRoom(entry.room, { type: 'hit', from: id, targetId: data.targetId, amount: data.amount });
       } else if (data.type === 'start' && room.hostId === id) {

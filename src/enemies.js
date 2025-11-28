@@ -131,6 +131,32 @@ export class EnemyManager {
             }
         }
     }
+
+    getEnemyById(id) {
+        if (!id) return null;
+        return this.enemies.find(e => e && e.mesh && e.mesh.userData && e.mesh.userData.gameId === id) || null;
+    }
+
+    applyRemoteZombieHit(id, amount) {
+        const enemy = this.getEnemyById(id);
+        if (!enemy || enemy.isDead) return null;
+        enemy.takeDamage(amount);
+        return enemy.health;
+    }
+
+    syncZombieState(id, health) {
+        const enemy = this.getEnemyById(id);
+        if (!enemy) return;
+        enemy.health = health;
+        const denom = enemy.maxHealth || 100;
+        const percent = Math.max(0, enemy.health / denom);
+        if (enemy.healthBarFg) {
+            enemy.healthBarFg.scale.x = percent;
+        }
+        if (health <= 0 && !enemy.isDead) {
+            enemy.startDeath();
+        }
+    }
 }
 
 
@@ -165,6 +191,7 @@ class Bot {
             this.damage = 5;
             this.speed = 4.5; // Was 2.5
         }
+        this.maxHealth = this.health;
 
         this.state = 'wander'; // wander, chase, attack
         this.isDead = false;
@@ -454,7 +481,8 @@ class Bot {
         this.health -= amount;
         
         // Update Health Bar
-        const percent = Math.max(0, this.health / 100);
+        const denom = this.maxHealth || 100;
+        const percent = Math.max(0, this.health / denom);
         this.healthBarFg.scale.x = percent;
         // Shift position to keep left aligned? 
         // Default plane is centered. Scaling X shrinks to center.

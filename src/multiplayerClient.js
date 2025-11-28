@@ -14,6 +14,7 @@ export class MultiplayerClient {
         this.lastSend = 0;
         this.sendInterval = 0.05; // seconds (20 Hz)
         this.lastSentPos = null;
+        this.lastSentRot = null;
         this.lastAnimSig = null;
         this.heartbeatTimer = 0;
         this.isHost = false;
@@ -22,11 +23,14 @@ export class MultiplayerClient {
         this.deadPeers = new Set();
         this.matchLive = false;
         this.remoteStates = new Map(); // id -> [{ t, pos, anim, nick, color }]
+        this.remoteLastYaw = new Map(); // id -> last unwrapped yaw for continuity
         this.interpDelayMs = 100;
         this.maxBufferMs = 1000;
         this.maxExtrapMs = 80;
+        this.remoteFaceOffset = 0; // adjust facing if model forward differs from camera forward
         this._now = (typeof performance !== 'undefined' && performance.now.bind(performance)) || Date.now;
         this._tmpVec = new THREE.Vector3();
+        this.enemyManager = null;
         this.netStats = {
             txBytes: 0,
             rxBytes: 0,
@@ -108,13 +112,16 @@ export class MultiplayerClient {
                 this.id = data.id;
                 this.isHost = !!data.isHost;
                 if (data.settings) this.roomSettings = data.settings;
+                if (data.custom) {
+                    this.localCustom = data.custom;
+                }
                 if (this.onPeersChanged) this.onPeersChanged(this.getPeerCount());
                 if (this.onHostChanged) this.onHostChanged(this.isHost);
                 if (data.settings && this.onSettings) this.onSettings(data.settings);
             } else if (data.type === 'player-join') {
                 // Create placeholder, ignore self
                 if (data.id && data.id !== this.id) {
-                    this.ensureRemote(data.id);
+                    this.ensureRemote(data.id, null, data.custom);
                 }
                 if (this.onPeersChanged) this.onPeersChanged(this.getPeerCount());
             } else if (data.type === 'player-leave') {
@@ -122,17 +129,24 @@ export class MultiplayerClient {
                 if (this.onPeersChanged) this.onPeersChanged(this.getPeerCount());
             } else if (data.type === 'state' && data.id !== this.id) {
                 if (this.deadPeers.has(data.id)) return; // ignore updates from dead peers
-                const mesh = this.ensureRemote(data.id, data.color);
+                const mesh = this.ensureRemote(data.id, data.color, data.custom);
                 const snapTime = typeof data.ts === 'number' ? data.ts : this._now();
                 this.bufferRemoteState(data.id, {
                     t: snapTime,
                     pos: data.pos,
+                    rot: data.rot,
+                    fwd: data.fwd,
                     anim: data.anim,
                     nick: data.nick,
-                    color: data.color
+                    color: data.color,
+                    custom: data.custom ? { ...data.custom } : null
                 });
                 if (mesh && data.color && mesh.userData?.color !== data.color) {
                     this.applyColorToTorso(mesh, data.color);
+                }
+                this.applyRemoteCustomization(mesh, data.custom);
+                if (mesh && mesh.userData) {
+                    mesh.userData.custom = data.custom ? { ...data.custom } : null;
                 }
             } else if (data.type === 'hit') {
                 if (this.onHit) {
@@ -149,6 +163,17 @@ export class MultiplayerClient {
             } else if (data.type === 'settings') {
                 this.roomSettings = data.settings;
                 if (this.onSettings) this.onSettings(data.settings);
+            } else if (data.type === 'zombie-hit') {
+                if (this.isHost && this.enemyManager && data.id && typeof data.amount === 'number') {
+                    const health = this.enemyManager.applyRemoteZombieHit(data.id, data.amount);
+                    if (typeof health === 'number') {
+                        this.sendZombieState(data.id, health);
+                    }
+                }
+            } else if (data.type === 'zombie-state') {
+                if (this.enemyManager && data.id && typeof data.health === 'number') {
+                    this.enemyManager.syncZombieState(data.id, data.health);
+                }
             } else if (data.type === 'player-dead') {
                 if (data.id) {
                     this.deadPeers.add(data.id);
@@ -164,7 +189,7 @@ export class MultiplayerClient {
         }
     }
 
-    ensureRemote(id, colorOverride = null) {
+    ensureRemote(id, colorOverride = null, custom = null) {
         if (!id || id === this.id) return null;
         if (this.deadPeers && this.deadPeers.has(id)) return null;
         if (this.others.has(id)) return this.others.get(id);
@@ -181,6 +206,8 @@ export class MultiplayerClient {
             });
             this.scene.add(mesh);
             this.others.set(id, mesh);
+            if (mesh.userData) mesh.userData.custom = custom ? { ...custom } : null;
+            this.applyRemoteCustomization(mesh, custom);
             return mesh;
         }
         // Fallback simple box
@@ -191,6 +218,8 @@ export class MultiplayerClient {
         fallback.userData = { gameId: id, gameName: 'Player' };
         this.scene.add(fallback);
         this.others.set(id, fallback);
+        if (fallback.userData) fallback.userData.custom = custom ? { ...custom } : null;
+        this.applyRemoteCustomization(fallback, custom);
         return fallback;
     }
 
@@ -310,7 +339,40 @@ export class MultiplayerClient {
                 rightX: this.player.rightLegPivot ? this.player.rightLegPivot.rotation.x : 0
             }
         };
-        const payload = { type: 'state', pos: { x: pos.x, y: pos.y, z: pos.z }, nick: this.nick, color: this.color, anim, ts: this._now() };
+        // Use camera forward vector to derive facing; send forward dir explicitly to avoid wrap issues
+        let rotToSend = 0;
+        let fwd = { x: 0, z: 1 };
+        if (this.player && this.player.camera && this.player.camera.getWorldDirection) {
+            const dir = new THREE.Vector3();
+            this.player.camera.getWorldDirection(dir);
+            dir.y = 0;
+            if (dir.lengthSq() < 1e-6 && this.player.mesh && this.player.mesh.rotation) {
+                rotToSend = this.player.mesh.rotation.y;
+                fwd = { x: Math.sin(rotToSend), z: Math.cos(rotToSend) };
+            } else {
+                dir.normalize();
+                rotToSend = Math.atan2(dir.x, dir.z);
+                fwd = { x: dir.x, z: dir.z };
+            }
+        } else {
+            const viewYaw = (typeof this.player.yaw === 'number') ? this.player.yaw : (this.player.mesh && this.player.mesh.rotation ? this.player.mesh.rotation.y : 0);
+            rotToSend = this._wrapAngle(viewYaw);
+            fwd = { x: Math.sin(rotToSend), z: Math.cos(rotToSend) };
+        }
+        // Align model forward (+Z) with camera forward (-Z)
+        rotToSend = this._wrapAngle(rotToSend + Math.PI);
+        fwd = { x: Math.sin(rotToSend), z: Math.cos(rotToSend) };
+        const payload = {
+            type: 'state',
+            pos: { x: pos.x, y: pos.y, z: pos.z },
+            rot: rotToSend,
+            fwd,
+            nick: this.nick,
+            color: this.color,
+            anim,
+            ts: this._now(),
+            custom: { ...this.getCustomization() }
+        };
 
         // Only send if something meaningful changed, or as a heartbeat every few seconds
         let moved = false;
@@ -325,14 +387,16 @@ export class MultiplayerClient {
         }
         const animSig = `${anim.arms.leftX.toFixed(3)},${anim.arms.rightX.toFixed(3)},${anim.legs.leftX.toFixed(3)},${anim.legs.rightX.toFixed(3)}`;
         const animChanged = this.lastAnimSig !== animSig;
+        const rotChanged = Math.abs(this._angleDiff(this.lastSentRot ?? rotToSend, rotToSend)) > 0.02;
         const heartbeatDue = this.heartbeatTimer >= 5;
 
-        if (moved || animChanged || heartbeatDue) {
+        if (moved || animChanged || rotChanged || heartbeatDue) {
             const msg = JSON.stringify(payload);
             try { this.socket.send(msg); } catch (e) {}
             this.trackTx(msg.length);
             this.lastSentPos = { x: pos.x, y: pos.y, z: pos.z };
             this.lastAnimSig = animSig;
+            this.lastSentRot = rotToSend;
             if (heartbeatDue) this.heartbeatTimer = 0;
         }
     }
@@ -376,7 +440,7 @@ export class MultiplayerClient {
     sendJoin() {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
         try {
-            const msg = JSON.stringify({ type: 'join', room: this.roomCode, nick: this.nick, color: this.color });
+            const msg = JSON.stringify({ type: 'join', room: this.roomCode, nick: this.nick, color: this.color, custom: this.getCustomization() });
             this.socket.send(msg);
             this.trackTx(msg.length);
         } catch (e) {}
@@ -423,9 +487,93 @@ export class MultiplayerClient {
     bufferRemoteState(id, state) {
         if (!id || !state) return;
         const arr = this.remoteStates.get(id) || [];
+        if (typeof state.rot === 'number') {
+            const prev = this.remoteLastYaw.get(id);
+            const unwrapped = this._unwrapAngle(state.rot, prev);
+            state.rot = unwrapped;
+            this.remoteLastYaw.set(id, unwrapped);
+        }
         arr.push(state);
         while (arr.length > 24) arr.shift();
         this.remoteStates.set(id, arr);
+    }
+
+    applyRemoteCustomization(mesh, custom) {
+        if (!mesh || !custom) return;
+        const head = mesh.getObjectByName('playerHead');
+        if (!head) return;
+        this.removeNodesByRole(head, 'playerMouth');
+        const mouth = this._buildMouthMesh(custom.mouthStyle || 'serious');
+        if (mouth) head.add(mouth);
+        this.setHatVisibility(head, custom.showHat !== false);
+    }
+
+    removeNodesByRole(root, role) {
+        if (!root) return;
+        const toRemove = [];
+        root.traverse(node => {
+            if (node.userData && node.userData.role === role) {
+                toRemove.push(node);
+            }
+        });
+        toRemove.forEach(node => {
+            if (node.parent) node.parent.remove(node);
+        });
+    }
+
+    setHatVisibility(root, visible) {
+        if (!root) return;
+        root.traverse(node => {
+            if (node.userData && node.userData.role === 'playerHat') {
+                node.visible = visible;
+            }
+        });
+    }
+
+    _buildMouthMesh(style) {
+        const s = (style || 'serious').toLowerCase();
+        const matBase = new THREE.MeshStandardMaterial({ color: 0x2b1b10, roughness: 0.6, metalness: 0 });
+        let mesh = null;
+        if (s === 'smile') {
+            const group = new THREE.Group();
+            group.userData = { role: 'playerMouth' };
+            group.name = 'playerMouth';
+            const segMat = matBase.clone();
+            const seg1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.02), segMat);
+            const seg2 = seg1.clone();
+            const seg3 = seg1.clone();
+            seg1.position.set(-0.1, -0.15, 0.26);
+            seg1.rotation.z = -0.2;
+            seg2.position.set(0, -0.16, 0.26);
+            seg3.position.set(0.1, -0.15, 0.26);
+            seg3.rotation.z = 0.2;
+            [seg1, seg2, seg3].forEach(seg => {
+                seg.userData = { role: 'playerMouth' };
+                seg.name = 'playerMouthSeg';
+            });
+            group.add(seg1, seg2, seg3);
+            mesh = group;
+        } else if (s === 'angry') {
+            const mat = new THREE.MeshStandardMaterial({ color: 0x5a0c0c, roughness: 0.4 });
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.02), mat);
+            mesh.position.set(0, -0.16, 0.26);
+            mesh.rotation.z = -0.18;
+        } else if (s === 'surprised') {
+            mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 20), matBase);
+            mesh.position.set(0, -0.14, 0.26);
+            mesh.rotation.x = Math.PI / 2;
+        } else if (s === 'none') {
+            return null;
+        } else {
+            mesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.02), matBase);
+            mesh.position.set(0, -0.16, 0.26);
+        }
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        if (!mesh.userData) mesh.userData = {};
+        mesh.userData.role = 'playerMouth';
+        mesh.name = mesh.name || 'playerMouth';
+        return mesh;
     }
 
     updateRemoteInterpolation() {
@@ -470,6 +618,13 @@ export class MultiplayerClient {
                     latest.pos.z + vz * lookahead
                 );
                 mesh.position.copy(this._tmpVec);
+                if (mesh.rotation) {
+                    if (typeof latest.rot === 'number') {
+                        mesh.rotation.y = this._wrapAngle(latest.rot + this.remoteFaceOffset);
+                    } else if (latest.fwd && typeof latest.fwd.x === 'number' && typeof latest.fwd.z === 'number') {
+                        mesh.rotation.y = this._wrapAngle(Math.atan2(latest.fwd.x, latest.fwd.z) + this.remoteFaceOffset);
+                    }
+                }
                 this.applyRemoteAnimation(mesh, latest.anim);
                 this.updateLabel(mesh, latest.nick);
                 return;
@@ -491,6 +646,24 @@ export class MultiplayerClient {
             );
             mesh.position.copy(this._tmpVec);
 
+            // Interpolate facing (yaw). Keep shortest angle path.
+            const baseYawA = typeof a.rot === 'number'
+                ? a.rot
+                : (typeof a.fwd?.x === 'number' && typeof a.fwd?.z === 'number' ? Math.atan2(a.fwd.x, a.fwd.z) : mesh.rotation.y || 0);
+            const baseYawB = typeof b.rot === 'number'
+                ? b.rot
+                : (typeof b.fwd?.x === 'number' && typeof b.fwd?.z === 'number' ? Math.atan2(b.fwd.x, b.fwd.z) : baseYawA);
+            const yawA = baseYawA + this.remoteFaceOffset;
+            const yawB = baseYawB + this.remoteFaceOffset;
+            const wrapAngle = (ang) => {
+                while (ang > Math.PI) ang -= Math.PI * 2;
+                while (ang < -Math.PI) ang += Math.PI * 2;
+                return ang;
+            };
+            const deltaYaw = yawB - yawA;
+            const interpYaw = yawA + deltaYaw * alpha;
+            if (mesh.rotation) mesh.rotation.y = wrapAngle(interpYaw + this.remoteFaceOffset);
+
             // Interpolate simple limb rotations
             const lerpVal = (x1, x2) => {
                 if (typeof x1 !== 'number') x1 = 0;
@@ -510,6 +683,9 @@ export class MultiplayerClient {
                 }
             };
             this.applyRemoteAnimation(mesh, anim);
+            const customToApply = b.custom || a.custom || (mesh.userData ? mesh.userData.custom : null);
+            this.applyRemoteCustomization(mesh, customToApply);
+            if (mesh.userData) mesh.userData.custom = customToApply ? { ...customToApply } : null;
             this.updateLabel(mesh, b.nick || a.nick);
         });
     }
@@ -525,6 +701,22 @@ export class MultiplayerClient {
     trackTx(bytes) {
         if (!bytes || bytes <= 0) return;
         this.netStats.txBytes += bytes;
+    }
+
+    sendZombieHit(id, amount) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+        if (!id || typeof amount !== 'number') return;
+        const msg = JSON.stringify({ type: 'zombie-hit', id, amount });
+        try { this.socket.send(msg); } catch (e) {}
+        this.trackTx(msg.length);
+    }
+
+    sendZombieState(id, health) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+        if (!id || typeof health !== 'number') return;
+        const msg = JSON.stringify({ type: 'zombie-state', id, health });
+        try { this.socket.send(msg); } catch (e) {}
+        this.trackTx(msg.length);
     }
 
     trackRx(bytes) {
@@ -555,5 +747,37 @@ export class MultiplayerClient {
 
     getNetStats() {
         return this.netStats;
+    }
+
+    getCustomization() {
+        if (!this.player) return { mouthStyle: 'serious', showHat: true };
+        return {
+            mouthStyle: this.player.mouthStyle || 'serious',
+            showHat: this.player.showHat !== false
+        };
+    }
+
+    setEnemyManager(em) {
+        this.enemyManager = em;
+    }
+
+    _wrapAngle(a) {
+        let ang = a;
+        while (ang > Math.PI) ang -= Math.PI * 2;
+        while (ang < -Math.PI) ang += Math.PI * 2;
+        return ang;
+    }
+
+    _angleDiff(a, b) {
+        return this._wrapAngle(a - b);
+    }
+
+    _unwrapAngle(angle, prev) {
+        if (typeof prev !== 'number') return angle;
+        let a = angle;
+        let diff = a - prev;
+        while (diff > Math.PI) { a -= Math.PI * 2; diff = a - prev; }
+        while (diff < -Math.PI) { a += Math.PI * 2; diff = a - prev; }
+        return a;
     }
 }
