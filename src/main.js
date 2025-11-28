@@ -188,6 +188,10 @@ class Game {
         hotbar.style.display = show ? 'flex' : 'none';
     }
 
+    setMenuOpenState(open) {
+        document.body.classList.toggle('menu-open', !!open);
+    }
+
     updateDebugToggleVisibility(enabled) {
         const btn = document.getElementById('debug-toggle-btn');
         if (!btn) return;
@@ -470,6 +474,7 @@ class Game {
             
             // Hide Menu
             menu.style.display = 'none';
+            this.setMenuOpenState(false);
             // Start background music (user gesture) if enabled
             if (settings.musicEnabled !== false) {
                 this.playBackgroundMusic();
@@ -597,6 +602,7 @@ class Game {
 
         // Hide hotbar while menu is open
         this.setHotbarVisible(false);
+        this.setMenuOpenState(true);
 
         // Tabs: simple show/hide panels
         const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
@@ -1055,6 +1061,7 @@ class Game {
                     }
                     const menu = document.getElementById('main-menu');
                     if (menu) menu.style.display = 'none';
+                    this.setMenuOpenState(false);
                     this.setHotbarVisible(true);
                     // Hide palette so clicks go back to canvas; reopen with ESC if needed
                     try { palette.classList.add('hidden'); } catch (e) {}
@@ -1350,6 +1357,7 @@ class Game {
         const menu = document.getElementById('main-menu');
         if (menu) {
             menu.style.display = 'flex';
+            this.setMenuOpenState(true);
             
             // Update button text to show "Resume" instead of "Play Game"
             const playBtn = document.getElementById('play-btn');
