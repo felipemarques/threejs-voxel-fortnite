@@ -472,7 +472,7 @@ body.menu-open #hotbar {
   position: absolute;
   top: 10px;
   left: 10px;
-  width: 300px;
+  width: 200px;
   max-width: 90vw;
   display: flex;
   flex-direction: column;
@@ -1179,7 +1179,7 @@ body.menu-open #hotbar {
 #ai-panel {
   position: absolute;
   top: 10px;
-  left: 320px;
+  left: 220px;
   background: rgba(0, 0, 0, 0.75);
   padding: 12px;
   border-radius: 12px;
@@ -1224,6 +1224,30 @@ body.menu-open #hotbar {
 
 #ai-panel button:hover {
   filter: brightness(1.05);
+}
+
+.ai-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ai-row label {
+  font-weight: 700;
+  font-size: 11px;
+  color: #cfd8dc;
+}
+
+#ai-provider {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #111;
+  color: #fff;
+  font-family: monospace;
 }
 
 #ai-log {

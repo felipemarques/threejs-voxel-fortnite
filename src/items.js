@@ -43,8 +43,8 @@ export class ItemManager {
     }
 
     initLoot() {
-        // Matrix/Studio mode: no auto-loot here (loadout/spawns handled elsewhere)
-        if (this.settings.gameMode === 'matrix' || this.settings.gameMode === 'studio') return;
+        // Matrix/Studio/Matrix-AI mode: no auto-loot here (loadout/spawns handled elsewhere)
+        if (this.settings.gameMode === 'matrix' || this.settings.gameMode === 'studio' || this.settings.gameMode === 'matrix-ai') return;
         if (this.settings.skipLoot) return;
         // Create some random chests/items
         for (let i = 0; i < 24; i++) {

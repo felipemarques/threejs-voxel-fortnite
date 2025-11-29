@@ -14,7 +14,7 @@ export class Player {
         this.worldObjects = worldObjects;
         this.world = null;
         this.hud = null;
-        this.gameMode = settings.gameMode || 'survival';
+        this.gameMode = settings.gameMode || 'arcade';
         // Optional visual tracers; off by default to avoid extra draw calls
         this.showTracers = settings.showTracers === true;
         this.backpack = null;
@@ -73,11 +73,17 @@ export class Player {
         ];
 
         
-        // Start with Punch and Pistol
-        this.weapons = [
-            this.allWeapons[1], // Soco
-            this.allWeapons[0]  // Pistola
-        ];
+        // Start loadout
+        if (this.gameMode === 'matrix-ai') {
+            // Bare hands only for Matrix AI Builder
+            this.weapons = [this.allWeapons[1]]; // Fist
+        } else {
+            // Punch + Pistol
+            this.weapons = [
+                this.allWeapons[1], // Soco
+                this.allWeapons[0]  // Pistola
+            ];
+        }
 
         this.currentWeaponIndex = 0;
 
@@ -1396,25 +1402,21 @@ export class Player {
         this.previousPosition.copy(this.mesh.position);
 
             // Handle stamina drain/recovery
-            if (this.isSprinting && !this.isCrouching && moving && this.stamina > 0) {
-                // Drain stamina per second while sprinting
-                if (this.gameMode !== 'studio') {
+            const staminaInfinite = this.gameMode === 'studio' || this.gameMode === 'matrix-ai';
+            if (staminaInfinite) {
+                this.stamina = 100;
+            } else {
+                if (this.isSprinting && !this.isCrouching && moving && this.stamina > 0) {
                     const drain = 20 * dt; // 20 stamina per second
                     this.stamina = Math.max(0, this.stamina - drain);
                     if (this.stamina <= 0) {
                         this.isSprinting = false; // stop sprinting when out
                     }
-                }
-            } else {
-                // Regenerate stamina when not sprinting
-                if (this.gameMode !== 'studio') {
+                } else {
+                    // Regenerate stamina when not sprinting
                     const regen = 10 * dt; // 10 stamina per second
                     this.stamina = Math.min(100, this.stamina + regen);
                 }
-            }
-
-            if (this.gameMode === 'studio') {
-                this.stamina = 100;
             }
 
             // Camera Follow

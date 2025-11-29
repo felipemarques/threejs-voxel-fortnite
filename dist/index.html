@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voxel Firecraft Prototype</title>
     <link rel="icon" type="image/png" href="/threejs-voxel-firecraft/dist/assets/favicon-BAg40dZS.png">
-  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/index-_NgeATwR.js"></script>
-  <link rel="stylesheet" crossorigin href="/threejs-voxel-firecraft/dist/assets/index-COBGs9l5.css">
+  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/index-Dl5d7jnC.js"></script>
+  <link rel="stylesheet" crossorigin href="/threejs-voxel-firecraft/dist/assets/index-BdH4Kktm.css">
 </head>
 <body>
 
@@ -53,12 +53,20 @@
         <!-- Studio palette (global, not tied to main menu) -->
         <!-- Storm Timer -->
         <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>
+        <!-- Survival Timer -->
+        <div id="survival-timer" class="hidden">Survival Time: <span id="survival-time-value">00:00</span></div>
         <!-- AI Builder Panel -->
         <div id="ai-panel" class="hidden" aria-label="AI Builder">
             <div class="ai-header">Matrix AI Builder</div>
             <div class="ai-body">
+                <div class="ai-row">
+                    <label for="ai-provider">Provider</label>
+                    <select id="ai-provider">
+                        <option value="openai" selected>OpenAI</option>
+                    </select>
+                </div>
                 <textarea id="ai-prompt" placeholder="Descreva o que quer construir..."></textarea>
-                <button id="ai-send">Send to AI (stub)</button>
+                <button id="ai-send">Send to AI</button>
                 <div id="ai-log"></div>
             </div>
         </div>
@@ -77,7 +85,8 @@
 
     <div class="dashboardContainer">
         <!-- Dashboard -->
-        <div id="dashboard" style="background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
+        <div id="dashboard" style="background: rgba(0,0,0,0.5); color: white; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; position: relative;">
+            <button id="dash-toggle" style="position:absolute; top:6px; right:6px; background: rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:4px; font-size:10px; padding:2px 6px; cursor:pointer;">–</button>
             <div>FPS: <span id="fps-counter">0</span></div>
             <div>Enemies: <span id="enemy-count">0</span></div>
             <div>Killed: <span id="kill-count">0</span></div>
@@ -93,7 +102,8 @@
         </div>
 
         <!-- Performance Dashboard -->
-        <div id="perf-dashboard" style="background: rgba(0,0,0,0.55); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; min-width: 180px; margin-top: 8px;">
+        <div id="perf-dashboard" style="background: rgba(0,0,0,0.55); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; min-width: 180px; margin-top: 8px; position: relative;">
+            <button id="perf-toggle" style="position:absolute; top:6px; right:6px; background: rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:4px; font-size:10px; padding:2px 6px; cursor:pointer;">–</button>
             <div>Frame: <span id="perf-frame">0.0</span> ms</div>
             <div>Calls: <span id="perf-calls">0</span></div>
             <div>Tris: <span id="perf-tris">0</span></div>
@@ -104,6 +114,7 @@
             <div>JS Heap: <span id="perf-mem">0</span> MB</div>
             <div>CPU: <span id="perf-cpu">N/A</span></div>
             <div>GPU: <span id="perf-gpu">N/A</span></div>
+            <div>GPU Mem: <span id="perf-gpu-mem">N/A</span></div>
             <div>Net: <span id="net-stats">--</span></div>
             <canvas id="net-chart" width="180" height="40" style="margin-top: 4px; background: rgba(255,255,255,0.05); border-radius: 3px;"></canvas>
         </div>
@@ -160,7 +171,8 @@
             <div class="tab-buttons">
                 <button class="tab-btn" data-tab="tab-general">General</button>
                 <button class="tab-btn" data-tab="tab-sound">Sound</button>
-                <button class="tab-btn active" data-tab="tab-survival" data-mode="survival">Arcade / Survival</button>
+                <button class="tab-btn" data-tab="tab-survival" data-mode="survival">Survival</button>
+                <button class="tab-btn active" data-tab="tab-arcade" data-mode="arcade">Arcade</button>
                 <button class="tab-btn" data-tab="tab-arena" data-mode="arena">Arena</button>
                 <button class="tab-btn" data-tab="tab-matrix" data-mode="matrix">Matrix</button>
                 <button class="tab-btn" data-tab="tab-matrix-ai" data-mode="matrix-ai">Matrix AI</button>
@@ -200,6 +212,43 @@
                 </div>
 
                 <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-performance-mode" style="width:20px; height:20px;">
+                        Performance Mode
+                    </label>
+                </div>
+
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-auto-performance" style="width:20px; height:20px;">
+                        Auto Performance (adaptive resolution)
+                    </label>
+                </div>
+
+                <div class="menu-group">
+                    <label>Render Scale: <span id="render-scale-val">100</span>%</label>
+                    <input type="range" id="setting-render-scale" min="50" max="100" step="5" value="100">
+                </div>
+
+                <div class="menu-group">
+                    <label>Mouth Style</label>
+                    <select id="setting-mouth-style">
+                        <option value="serious" selected>Serious</option>
+                        <option value="smile">Smiling</option>
+                        <option value="angry">Angry</option>
+                        <option value="surprised">Surprised</option>
+                        <option value="none">No Mouth</option>
+                    </select>
+                </div>
+
+                <div class="menu-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="setting-show-hat" checked style="width:20px; height:20px;">
+                        Show Hat
+                    </label>
+                </div>
+
+                <div class="menu-group">
                     <label>Language</label>
                     <select id="setting-language">
                         <option value="en" selected>English</option>
@@ -234,29 +283,51 @@
                 </div>
             </div>
 
-            <div id="tab-sound" class="tab-panel hidden">
-                <div class="menu-group">
-                    <label>Sound</label>
-                    <p class="menu-helper">Controle global de áudio e música de fundo.</p>
-                </div>
-                <div class="menu-group">
-                    <label style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" id="setting-music-enabled" checked style="width:20px; height:20px;">
-                        Enable Background Music
-                    </label>
-                </div>
-                <div class="menu-group">
-                    <label style="margin:0; min-width:60px;">Volume:</label>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="range" id="setting-music-volume" min="0" max="100" value="50" style="flex:1;">
-                        <span id="setting-music-volume-val" style="color:white; font-weight:bold; min-width:35px;">50</span>
-                    </div>
+        <div id="tab-sound" class="tab-panel hidden">
+            <div class="menu-group">
+                <label>Sound</label>
+                <p class="menu-helper">Controle global de áudio e música de fundo.</p>
+            </div>
+            <div class="menu-group">
+                <label style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="setting-music-enabled" checked style="width:20px; height:20px;">
+                    Enable Background Music
+                </label>
+            </div>
+            <div class="menu-group">
+                <label style="margin:0; min-width:60px;">Volume:</label>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="range" id="setting-music-volume" min="0" max="100" value="50" style="flex:1;">
+                    <span id="setting-music-volume-val" style="color:white; font-weight:bold; min-width:35px;">50</span>
                 </div>
             </div>
+            <div class="menu-group">
+                <label style="margin:0; min-width:60px;">SFX Volume:</label>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="range" id="setting-sfx-volume" min="0" max="100" value="70" style="flex:1;">
+                    <span id="setting-sfx-volume-val" style="color:white; font-weight:bold; min-width:35px;">70</span>
+                </div>
+            </div>
+        </div>
 
             <div id="tab-survival" class="tab-panel hidden">
                 <div class="menu-group">
-                    <label>Modo Arcade / Survival</label>
+                    <label>Modo Survival</label>
+                    <p class="menu-helper">Sobreviva sem tempestade e sem veículos. Inimigos mais fortes e mapa limpo.</p>
+                </div>
+                <div class="menu-group">
+                    <label>Difficulty</label>
+                    <select id="setting-survival-difficulty">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="tab-arcade" class="tab-panel hidden">
+                <div class="menu-group">
+                    <label>Modo Arcade</label>
                     <p class="menu-helper">Modo padrão com tempestade, drops e progressão. Use as opções gerais para afinar parâmetros.</p>
                 </div>
                 <div class="menu-group">

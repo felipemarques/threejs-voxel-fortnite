@@ -40,11 +40,13 @@ class Game {
         this.scene.background = new THREE.Color(0x87CEEB); // Sky blue
         this.scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
         this._animationStarted = false;
-        this._selectedMode = 'survival';
+        this._selectedMode = 'arcade';
         this._defaultRandom = Math.random;
         this._currentRandomSeed = null;
         this.matchSettings = null;
         this.lastPlaySettings = null;
+        this.aiObjects = [];
+        this.aiMaxAiObjects = 200;
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         // Cap pixel ratio to avoid ultra-high-res rendering on dense displays
@@ -449,6 +451,7 @@ class Game {
         const savedSettings = localStorage.getItem('voxel-firecraft-settings');
         if (savedSettings) {
             const s = JSON.parse(savedSettings);
+            if (s.gameMode === 'survival') s.gameMode = 'arcade';
             diffSelect.value = s.difficulty;
             enemiesInput.value = s.enemyCount;
             stormInput.value = s.stormTime;
@@ -554,13 +557,15 @@ class Game {
         }
 
         playBtn.onclick = () => {
-            const selectedMode = this._selectedMode || 'survival';
+            const selectedMode = this._selectedMode || 'arcade';
             if (selectedMode === 'multiplayer' && this.multiplayer && !this.multiplayer.isHost && !this.multiplayer.roomSettings) {
                 alert('Waiting for host settings. Please try again in a moment.');
                 return;
             }
             const settings = {
-                difficulty: diffSelect.value,
+                difficulty: (selectedMode === 'survival') 
+                    ? (document.getElementById('setting-survival-difficulty') ? document.getElementById('setting-survival-difficulty').value : 'medium')
+                    : diffSelect.value,
                 enemyCount: parseInt(enemiesInput.value),
                 stormTime: parseInt(stormInput.value),
                 stormEnabled: stormEnabledInput ? stormEnabledInput.checked : true,
@@ -831,11 +836,13 @@ class Game {
     startGame(settings) {
         // Components
         // 1. Player (initially without world objects)
+        this.clearAiObjects();
         this.multiplayerDropTimer = 0;
         this.multiplayerDropCooldown = 0;
         this.multiplayerDropActive = false;
         this.matchPhase = 'live';
         this.lobbyCountdown = 0;
+        this.victoryShown = false;
         const effectiveSettings = { ...settings };
         this.forceFixedMultiplayerSpawn = effectiveSettings.gameMode === 'multiplayer' ? !!settings.mpFixedSpawn : false;
         // Harmonize multiplayer settings (map size/seed/enemies) so all clients share the same world
@@ -872,6 +879,19 @@ class Game {
                 effectiveSettings.enemyCount = 0;
             }
         }
+        if (effectiveSettings.gameMode === 'survival') {
+            effectiveSettings.stormEnabled = false;
+            effectiveSettings.mapSize = Math.max(100, effectiveSettings.mapSize);
+        }
+        
+        // Initialize survival timer
+        this.survivalStartTime = performance.now();
+        this.survivalTime = 0;
+        
+        // Track loot drops for survival mode
+        this.lootDropEligible = false;
+        this.lootDropCooldown = 0;
+        
         this.multiplayerEnemyBaseCount = effectiveSettings.enemyCount || 0;
         this.player = new Player(this.camera, this.scene, null, effectiveSettings);
         if (typeof settings.sfxVolume !== 'undefined') {
@@ -1033,7 +1053,7 @@ class Game {
             this.refreshMultiplayerTargets();
             this.setupMultiplayerLobbyUI();
         }
-        // Enable click-to-identify in arcade/survival styles
+            // Enable click-to-identify in arcade style
         this.setupObjectInspector();
         // Hide DBG button when debug mode is off
         this.updateDebugToggleVisibility(!!settings.debugMode);
@@ -1064,8 +1084,15 @@ class Game {
         // Hide storm timer when storm disabled or non-storm modes
         const stormTimer = document.getElementById('storm-timer');
         if (stormTimer) {
-            const hide = effectiveSettings.stormEnabled === false || effectiveSettings.gameMode === 'studio' || effectiveSettings.gameMode === 'matrix' || effectiveSettings.gameMode === 'matrix-ai' || effectiveSettings.gameMode === 'multiplayer';
+            const hide = effectiveSettings.stormEnabled === false || effectiveSettings.gameMode === 'studio' || effectiveSettings.gameMode === 'matrix' || effectiveSettings.gameMode === 'matrix-ai' || effectiveSettings.gameMode === 'multiplayer' || effectiveSettings.gameMode === 'survival';
             stormTimer.classList.toggle('hidden', hide);
+        }
+        
+        // Show survival timer in arcade and survival modes
+        const survivalTimer = document.getElementById('survival-timer');
+        if (survivalTimer) {
+            const show = effectiveSettings.gameMode === 'arcade' || effectiveSettings.gameMode === 'survival';
+            survivalTimer.classList.toggle('hidden', !show);
         }
 
         // Event Listeners
@@ -1150,6 +1177,7 @@ class Game {
         const sendBtn = document.getElementById('ai-send');
         const promptEl = document.getElementById('ai-prompt');
         const logEl = document.getElementById('ai-log');
+        const providerEl = document.getElementById('ai-provider');
         if (!panel || !sendBtn || !promptEl || !logEl) return;
 
         const appendLog = (text, cls = '') => {
@@ -1168,6 +1196,188 @@ class Game {
             appendLog('AI: (stub) Interpreter not wired. Imagine this runs your Three.js code.', 'ai-bot');
             promptEl.value = '';
         };
+
+        const systemPrompt = `You are a level-building assistant for a Three.js sandbox. Respond ONLY with a JSON object:
+{
+  "actions": [
+    {
+      "action": "add",
+      "type": "box" | "sphere" | "cylinder" | "plane",
+      "pos": [x,y,z],
+      "size": [sx,sy,sz],
+      "color": "#rrggbb"
+    }
+  ]
+}
+Constraints: numbers are in meters, keep |x|,|z| <= 150, size in [0.2, 40]. No functions, no code, no prose, no markdown.`;
+
+        const callOpenAI = async (userText) => {
+            const keyInput = document.getElementById('setting-openai-key');
+            const apiKey = keyInput && keyInput.value ? keyInput.value.trim() : '';
+            if (!apiKey) {
+                appendLog('Erro: configure a chave OpenAI em Settings.', 'ai-error');
+                return '';
+            }
+            const body = {
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userText }
+                ],
+                temperature: 0.2,
+                max_tokens: 2000,
+                response_format: { type: 'json_object' }
+            };
+            const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(body)
+            });
+            if (!resp.ok) {
+                const errText = await resp.text();
+                appendLog(`Erro OpenAI: ${resp.status} ${errText}`, 'ai-error');
+                return '';
+            }
+            const json = await resp.json();
+            const answer = json && json.choices && json.choices[0] && json.choices[0].message ? json.choices[0].message.content : '';
+            appendLog(`AI: ${answer || '(vazio)'}`, 'ai-bot');
+            return answer || '';
+        };
+
+        sendBtn.onclick = async () => {
+            const val = promptEl.value.trim();
+            if (!val) return;
+            appendLog(`You: ${val}`, 'ai-user');
+            promptEl.value = '';
+            const provider = providerEl ? providerEl.value : 'openai';
+            sendBtn.disabled = true;
+            sendBtn.innerText = 'Enviando...';
+            try {
+                if (provider === 'openai') {
+                    const answer = await callOpenAI(val);
+                    if (answer) {
+                        const actions = this.parseAiActions(answer, appendLog);
+                        if (actions && actions.length) {
+                            const applied = this.applyAiActions(actions, appendLog);
+                            appendLog(`Aplicado: ${applied} objeto(s)`, 'ai-info');
+                        }
+                    }
+                } else {
+                    appendLog(`Provider ${provider} não suportado.`, 'ai-error');
+                }
+            } catch (err) {
+                appendLog(`Erro na requisição: ${err.message || err}`, 'ai-error');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerText = 'Send to AI';
+            }
+        };
+    }
+
+    parseAiActions(answer, log) {
+        const logger = log || (() => {});
+        let data = null;
+        try {
+            data = JSON.parse(answer);
+        } catch (e) {
+            logger('Falha ao parsear JSON da AI.', 'ai-error');
+            return [];
+        }
+        if (data && data.actions && Array.isArray(data.actions)) {
+            data = data.actions;
+        }
+        if (!Array.isArray(data)) {
+            logger('Resposta não é uma lista de ações.', 'ai-error');
+            return [];
+        }
+        const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+        const allowedTypes = new Set(['box', 'sphere', 'cylinder', 'plane']);
+        const colorRe = /^#([0-9a-fA-F]{6})$/;
+        const maxObjects = this.aiMaxAiObjects || 200;
+        const result = [];
+        for (const item of data) {
+            if (!item || item.action !== 'add') continue;
+            if (!allowedTypes.has(item.type)) continue;
+            const pos = Array.isArray(item.pos) ? item.pos.slice(0, 3) : [0, 0, 0];
+            const size = Array.isArray(item.size) ? item.size.slice(0, 3) : [1, 1, 1];
+            const normPos = [
+                clamp(Number(pos[0] ?? 0), -150, 150),
+                clamp(Number(pos[1] ?? 0), -10, 200),
+                clamp(Number(pos[2] ?? 0), -150, 150)
+            ];
+            const normSize = [
+                clamp(Math.abs(Number(size[0] ?? 1)), 0.2, 40),
+                clamp(Math.abs(Number(size[1] ?? 1)), 0.2, 40),
+                clamp(Math.abs(Number(size[2] ?? 1)), 0.2, 40)
+            ];
+            const color = typeof item.color === 'string' && colorRe.test(item.color) ? item.color : '#cccccc';
+            result.push({ type: item.type, pos: normPos, size: normSize, color });
+            if (result.length >= maxObjects) break;
+        }
+        if (!result.length) logger('Nenhuma ação válida na resposta.', 'ai-error');
+        return result;
+    }
+
+    clearAiObjects() {
+        if (!this.aiObjects) this.aiObjects = [];
+        this.aiObjects.forEach((obj) => {
+            try {
+                if (obj.parent) obj.parent.remove(obj);
+                if (obj.geometry && obj.geometry.dispose) obj.geometry.dispose();
+                if (obj.material && obj.material.dispose) obj.material.dispose();
+            } catch (e) {}
+        });
+        this.aiObjects = [];
+    }
+
+    applyAiActions(actions, log) {
+        const logger = log || (() => {});
+        if (!actions || !actions.length) return 0;
+        if (!this.scene || !this.player || this.player.gameMode !== 'matrix-ai') {
+            logger('Ações ignoradas: não está no modo Matrix AI Builder.', 'ai-error');
+            return 0;
+        }
+        // Reset previous builds
+        this.clearAiObjects();
+        const maxTotal = this.aiMaxAiObjects || 200;
+        const created = [];
+        const lightDir = new THREE.DirectionalLight(0xffffff, 0.2);
+        lightDir.position.set(0, 10, 0);
+        this.scene.add(lightDir);
+        created.push(lightDir);
+
+        actions.slice(0, maxTotal).forEach((a) => {
+            try {
+                let geom = null;
+                const mat = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(a.color),
+                    metalness: 0.05,
+                    roughness: 0.85
+                });
+                if (a.type === 'box') {
+                    geom = new THREE.BoxGeometry(a.size[0], a.size[1], a.size[2]);
+                } else if (a.type === 'sphere') {
+                    const r = a.size[0] / 2;
+                    geom = new THREE.SphereGeometry(r, 20, 16);
+                } else if (a.type === 'cylinder') {
+                    const r = a.size[0] / 2;
+                    geom = new THREE.CylinderGeometry(r, r, a.size[1], 16);
+                } else if (a.type === 'plane') {
+                    geom = new THREE.PlaneGeometry(a.size[0], a.size[2]);
+                }
+                if (!geom) return;
+                const mesh = new THREE.Mesh(geom, mat);
+                mesh.position.set(a.pos[0], a.pos[1], a.pos[2]);
+                if (a.type === 'plane') mesh.rotation.x = -Math.PI / 2;
+                this.scene.add(mesh);
+                created.push(mesh);
+            } catch (e) { logger('Falha ao criar objeto: ' + e.message, 'ai-error'); }
+        });
+        this.aiObjects = created;
+        return created.length;
     }
 
     refreshStudioPaletteVisibility() {
@@ -1298,8 +1508,8 @@ class Game {
 
         this._objectClickHandler = (event) => {
             if (!this.player || !this.hud) return;
-            const mode = this.player.gameMode || 'survival';
-            // Feature intended for arcade/survival style play (skip matrix/studio)
+            const mode = this.player.gameMode || 'arcade';
+            // Feature intended para arcade; ignora matrix/studio
             if (mode === 'matrix') return;
 
             // Studio click-to-place prefab
@@ -1669,6 +1879,46 @@ class Game {
             } catch (err) {
                 console.error('Error in multiplayer.update:', err);
             }
+            
+            // Update survival timer for arcade and survival modes
+            if (this.player && (this.player.gameMode === 'arcade' || this.player.gameMode === 'survival')) {
+                this.survivalTime = (performance.now() - this.survivalStartTime) / 1000;
+                const survivalTimeEl = document.getElementById('survival-time-value');
+                if (survivalTimeEl) {
+                    const minutes = Math.floor(this.survivalTime / 60);
+                    const seconds = Math.floor(this.survivalTime % 60);
+                    survivalTimeEl.innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+                
+                // Check for loot drop eligibility
+                if (this.itemManager && this.enemyManager) {
+                    const totalItems = this.itemManager.items ? this.itemManager.items.filter(it => !(it.userData && it.userData.isOpened)).length : 0;
+                    const killedPercent = this.enemyManager.targetCount > 0 ? (this.enemyManager.killedCount / this.enemyManager.targetCount) : 0;
+                    
+                    // If no items left and player killed at least 30% of zombies, enable loot drops
+                    if (totalItems === 0 && killedPercent >= 0.3 && !this.lootDropEligible) {
+                        this.lootDropEligible = true;
+                        this.lootDropCooldown = 0;
+                        console.log('Loot drops from sky enabled! Player killed 30%+ zombies.');
+                    }
+                    
+                    // Drop loot from sky periodically
+                    if (this.lootDropEligible) {
+                        this.lootDropCooldown -= cappedDt;
+                        if (this.lootDropCooldown <= 0) {
+                            this.lootDropCooldown = 45; // Drop every 45 seconds
+                            if (typeof this.itemManager.spawnMatrixDropNearPlayer === 'function') {
+                                // Drop 2-3 items near player
+                                const dropCount = 2 + Math.floor(Math.random() * 2);
+                                for (let i = 0; i < dropCount; i++) {
+                                    this.itemManager.spawnMatrixDropNearPlayer();
+                                }
+                                console.log(`Dropped ${dropCount} items from sky!`);
+                            }
+                        }
+                    }
+                }
+            }
 
             try {
                 this.hud.update();
@@ -1687,7 +1937,7 @@ class Game {
 
             // Check Victory
             try {
-                const noEnemiesMode = this.player && (this.player.gameMode === 'matrix' || this.player.gameMode === 'studio' || this.player.gameMode === 'multiplayer');
+                const noEnemiesMode = this.player && (this.player.gameMode === 'matrix' || this.player.gameMode === 'studio' || this.player.gameMode === 'multiplayer' || this.player.gameMode === 'matrix-ai');
                 if (!noEnemiesMode && this.enemyManager.enemies.length === 0 && !this.player.isDead && !this.victoryShown) {
                     this.victoryShown = true; // Prevent multiple calls
                     try {

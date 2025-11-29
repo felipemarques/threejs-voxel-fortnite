@@ -23,6 +23,7 @@ export class HUD {
         this.gameOverScreen = document.getElementById('game-over-screen');
         this.selectionInfo = document.getElementById('selection-info');
         this.selectionInfoTimeout = null;
+        this.hotbar = document.getElementById('hotbar');
         
         // Dashboard Elements
         this.fpsCounter = document.getElementById('fps-counter');
@@ -555,6 +556,11 @@ export class HUD {
                 touchControls.style.display = 'none';
             }
         } catch (e) {}
+
+        // Hide hotbar on game over
+        if (this.hotbar) {
+            this.hotbar.style.display = 'none';
+        }
         
         // Simple restart logic
         const restartBtn = document.getElementById('restart-btn');
@@ -594,6 +600,13 @@ export class HUD {
             const touchControls = document.getElementById('touch-controls');
             if (touchControls) {
                 touchControls.style.display = 'none';
+            }
+        } catch (e) {}
+
+        // Stop any pending damage sounds
+        try {
+            if (this.player && typeof this.player.clearHurtQueue === 'function') {
+                this.player.clearHurtQueue();
             }
         } catch (e) {}
         

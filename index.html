@@ -52,12 +52,20 @@
         <!-- Studio palette (global, not tied to main menu) -->
         <!-- Storm Timer -->
         <div id="storm-timer">Storm closes in: <span id="timer-value">00:30</span></div>
+        <!-- Survival Timer -->
+        <div id="survival-timer" class="hidden">Survival Time: <span id="survival-time-value">00:00</span></div>
         <!-- AI Builder Panel -->
         <div id="ai-panel" class="hidden" aria-label="AI Builder">
             <div class="ai-header">Matrix AI Builder</div>
             <div class="ai-body">
+                <div class="ai-row">
+                    <label for="ai-provider">Provider</label>
+                    <select id="ai-provider">
+                        <option value="openai" selected>OpenAI</option>
+                    </select>
+                </div>
                 <textarea id="ai-prompt" placeholder="Descreva o que quer construir..."></textarea>
-                <button id="ai-send">Send to AI (stub)</button>
+                <button id="ai-send">Send to AI</button>
                 <div id="ai-log"></div>
             </div>
         </div>
@@ -162,7 +170,8 @@
             <div class="tab-buttons">
                 <button class="tab-btn" data-tab="tab-general">General</button>
                 <button class="tab-btn" data-tab="tab-sound">Sound</button>
-                <button class="tab-btn active" data-tab="tab-survival" data-mode="survival">Arcade / Survival</button>
+                <button class="tab-btn" data-tab="tab-survival" data-mode="survival">Survival</button>
+                <button class="tab-btn active" data-tab="tab-arcade" data-mode="arcade">Arcade</button>
                 <button class="tab-btn" data-tab="tab-arena" data-mode="arena">Arena</button>
                 <button class="tab-btn" data-tab="tab-matrix" data-mode="matrix">Matrix</button>
                 <button class="tab-btn" data-tab="tab-matrix-ai" data-mode="matrix-ai">Matrix AI</button>
@@ -302,7 +311,22 @@
 
             <div id="tab-survival" class="tab-panel hidden">
                 <div class="menu-group">
-                    <label>Modo Arcade / Survival</label>
+                    <label>Modo Survival</label>
+                    <p class="menu-helper">Sobreviva sem tempestade e sem veículos. Inimigos mais fortes e mapa limpo.</p>
+                </div>
+                <div class="menu-group">
+                    <label>Difficulty</label>
+                    <select id="setting-survival-difficulty">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="tab-arcade" class="tab-panel hidden">
+                <div class="menu-group">
+                    <label>Modo Arcade</label>
                     <p class="menu-helper">Modo padrão com tempestade, drops e progressão. Use as opções gerais para afinar parâmetros.</p>
                 </div>
                 <div class="menu-group">

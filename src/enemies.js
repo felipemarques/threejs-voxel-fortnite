@@ -13,10 +13,12 @@ export class EnemyManager {
         this.killedCount = 0;
         this.groanBuffer = null;
         
-        const count = (settings && (settings.gameMode === 'matrix' || settings.gameMode === 'studio')) ? 0 : (settings && settings.gameMode === 'matrix-ai' ? 5 : (settings ? settings.enemyCount : 15));
+        const count = (settings && (settings.gameMode === 'matrix' || settings.gameMode === 'studio' || settings.gameMode === 'matrix-ai'))
+            ? 0
+            : (settings ? settings.enemyCount : 15);
         this.targetCount = count;
         this.difficulty = settings ? settings.difficulty : 'medium';
-        this.gameMode = settings && settings.gameMode ? settings.gameMode : 'survival';
+        this.gameMode = settings && settings.gameMode ? settings.gameMode : 'arcade';
         this.studioAiEnabled = false;
 
         // Initial spawn
@@ -79,7 +81,38 @@ export class EnemyManager {
         const groundY = (this.world && typeof this.world.getHeightAt === 'function') ? this.world.getHeightAt(x, z) : 0;
         
         const mapHalfSize = (this.world && this.world.halfMapSize) ? this.world.halfMapSize : 100;
-        const enemy = new Bot(this.scene, x, groundY, z, this.difficulty, mapHalfSize, this.player);
+        
+        // Determine zombie type
+        let isBig = false;
+        let zombieType = 'normal'; // 'normal', 'fat', or 'big'
+        
+        if (this.gameMode === 'survival') {
+            // Count existing big zombies
+            const bigCount = this.enemies.filter(e => e.isBig).length;
+            // Calculate allowed big zombies based on total target count
+            // 5 enemies -> 1 big
+            // 10 enemies -> 2 big
+            // 20 enemies -> 4 big
+            // Ratio is 1 big per 5 total
+            const allowedBig = Math.floor(this.targetCount / 5);
+            
+            if (bigCount < allowedBig) {
+                isBig = true;
+                zombieType = 'big';
+            } else {
+                // For non-big zombies in survival, alternate between normal and fat (1:1 ratio)
+                const normalCount = this.enemies.filter(e => !e.isBig && e.zombieType === 'normal').length;
+                const fatCount = this.enemies.filter(e => !e.isBig && e.zombieType === 'fat').length;
+                zombieType = fatCount < normalCount ? 'fat' : 'normal';
+            }
+        } else if (this.gameMode === 'arcade') {
+            // In arcade mode, alternate between normal and fat (1:1 ratio)
+            const normalCount = this.enemies.filter(e => e.zombieType === 'normal').length;
+            const fatCount = this.enemies.filter(e => e.zombieType === 'fat').length;
+            zombieType = fatCount < normalCount ? 'fat' : 'normal';
+        }
+
+        const enemy = new Bot(this.scene, x, groundY, z, this.difficulty, mapHalfSize, this.player, isBig, zombieType);
         enemy.audioCtx = this.audioCtx; // Pass audio context to bot
         enemy.deathBuffer = this.deathBuffer; // Pass death buffer
         enemy.groanBuffer = this.groanBuffer; // Pass groan buffer
@@ -124,7 +157,7 @@ export class EnemyManager {
             return true;
         });
 
-        if (this.gameMode !== 'multiplayer' && this.targetCount !== undefined && this.targetCount > 0) {
+        if (this.gameMode === 'survival' && this.targetCount !== undefined && this.targetCount > 0) {
             const deficit = this.targetCount - this.enemies.length;
             if (deficit > 0) {
                 for (let i = 0; i < deficit; i++) this.spawnEnemy();
@@ -161,12 +194,14 @@ export class EnemyManager {
 
 
 class Bot {
-    constructor(scene, x, y, z, difficulty, mapHalfSize = 100, player = null) {
+    constructor(scene, x, y, z, difficulty, mapHalfSize = 100, player = null, isBig = false, zombieType = 'normal') {
         this.scene = scene;
         this.position = new THREE.Vector3(x, y, z);
         this.mapHalfSize = mapHalfSize;
         this.world = null;
         this.player = player;
+        this.isBig = isBig;
+        this.zombieType = zombieType; // 'normal', 'fat', or 'big'
         this.deathTimer = 0;
         this.deathDuration = 0;
         this.deathFallProgress = 0;
@@ -191,11 +226,25 @@ class Bot {
             this.damage = 5;
             this.speed = 4.5; // Was 2.5
         }
+
+        // Apply Big Zombie modifiers
+        if (this.isBig) {
+            this.health *= 5;
+            this.damage *= 2; // Increased damage for big zombie
+            this.speed *= 0.75; // 25% slower
+        }
+        
+        // Apply FatZombie modifiers
+        if (this.zombieType === 'fat') {
+            this.health *= 1.5; // 50% more health
+            this.speed *= 0.5; // 50% slower
+        }
+
         this.maxHealth = this.health;
 
         this.state = 'wander'; // wander, chase, attack
         this.isDead = false;
-        this.attackRange = 2; // Melee range
+        this.attackRange = this.isBig ? 3.5 : 2; // Larger attack range for big zombie
         this.detectionRange = 25;
         this.attackCooldown = 1.5; // Slower attacks
         this.lastAttack = 0;
@@ -210,14 +259,37 @@ class Bot {
     createMesh() {
         this.mesh = new THREE.Group();
         this.mesh.position.copy(this.position);
-        this.mesh.userData = { gameId: Math.random().toString(36).substr(2, 9).toUpperCase(), gameName: 'Zombie' };
+        
+        // Set name based on zombie type
+        let zombieName = 'Zombie';
+        if (this.isBig) {
+            zombieName = 'Big Zombie';
+        } else if (this.zombieType === 'fat') {
+            zombieName = 'Fat Zombie';
+        }
+        
+        this.mesh.userData = { gameId: Math.random().toString(36).substr(2, 9).toUpperCase(), gameName: zombieName };
+        if (this.isBig) {
+            this.mesh.scale.set(2, 2, 2);
+        }
         this.scene.add(this.mesh);
 
-        const skinMat = new THREE.MeshStandardMaterial({ color: 0x8e44ad }); // Purple enemy (Zombie-like)
+        // Choose skin color based on zombie type
+        const skinColor = this.zombieType === 'fat' ? 0x4a7c59 : 0x8e44ad; // Green for fat, purple for normal/big
+        const skinMat = new THREE.MeshStandardMaterial({ color: skinColor }); // Green for FatZombie, Purple for others
         const clothesMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
 
+        // Adjust proportions for FatZombie
+        const isFat = this.zombieType === 'fat';
+        const headScale = isFat ? 1.3 : 1.0;
+        const bodyWidthScale = isFat ? 1.6 : 1.0;
+        const bodyDepthScale = isFat ? 1.4 : 1.0;
+        const armThicknessScale = isFat ? 1.3 : 1.0;
+        const legThicknessScale = isFat ? 1.4 : 1.0;
+
         // Head + face details
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skinMat);
+        const headSize = 0.5 * headScale;
+        const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize * 0.9, headSize), skinMat);
         head.position.y = 1.75;
         this.mesh.add(head);
         // Eyes (glowing)
@@ -243,36 +315,56 @@ class Bot {
             mouth.add(tooth);
         }
 
-        // Body
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), clothesMat);
-        body.position.y = 1.1;
+        // Body - wider and deeper for FatZombie
+        const bodyWidth = 0.6 * bodyWidthScale;
+        const bodyDepth = 0.3 * bodyDepthScale;
+        const bodyHeight = isFat ? 0.9 : 0.8; // Slightly taller body for fat zombie
+        const body = new THREE.Mesh(new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth), clothesMat);
+        body.position.y = isFat ? 1.05 : 1.1;
         this.mesh.add(body);
+        
+        // Add belly for FatZombie
+        if (isFat) {
+            const bellyGeo = new THREE.SphereGeometry(0.45, 8, 8);
+            const belly = new THREE.Mesh(bellyGeo, clothesMat);
+            belly.position.y = 0.9;
+            belly.position.z = 0.25;
+            belly.scale.set(1.1, 1.0, 0.9);
+            this.mesh.add(belly);
+        }
 
-        // Arms - Pivots
-        const armGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
+        // Arms - Pivots (thicker for FatZombie)
+        const armWidth = 0.2 * armThicknessScale;
+        const armDepth = 0.2 * armThicknessScale;
+        const armGeo = new THREE.BoxGeometry(armWidth, 0.8, armDepth);
         armGeo.translate(0, -0.3, 0);
 
         this.leftArmPivot = new THREE.Group();
-        this.leftArmPivot.position.set(-0.45, 1.4, 0);
+        const leftArmX = isFat ? -0.55 : -0.45;
+        this.leftArmPivot.position.set(leftArmX, 1.4, 0);
         this.mesh.add(this.leftArmPivot);
         this.leftArmPivot.add(new THREE.Mesh(armGeo, skinMat));
 
         this.rightArmPivot = new THREE.Group();
-        this.rightArmPivot.position.set(0.45, 1.4, 0);
+        const rightArmX = isFat ? 0.55 : 0.45;
+        this.rightArmPivot.position.set(rightArmX, 1.4, 0);
         this.mesh.add(this.rightArmPivot);
         this.rightArmPivot.add(new THREE.Mesh(armGeo, skinMat));
 
-        // Legs - Pivots
-        const legGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25);
+        // Legs - Pivots (thicker for FatZombie)
+        const legWidth = 0.25 * legThicknessScale;
+        const legDepth = 0.25 * legThicknessScale;
+        const legGeo = new THREE.BoxGeometry(legWidth, 0.8, legDepth);
         legGeo.translate(0, -0.4, 0);
 
         this.leftLegPivot = new THREE.Group();
-        this.leftLegPivot.position.set(-0.15, 0.7, 0);
+        const legSpacing = isFat ? 0.2 : 0.15;
+        this.leftLegPivot.position.set(-legSpacing, 0.7, 0);
         this.mesh.add(this.leftLegPivot);
         this.leftLegPivot.add(new THREE.Mesh(legGeo, clothesMat));
 
         this.rightLegPivot = new THREE.Group();
-        this.rightLegPivot.position.set(0.15, 0.7, 0);
+        this.rightLegPivot.position.set(legSpacing, 0.7, 0);
         this.mesh.add(this.rightLegPivot);
         this.rightLegPivot.add(new THREE.Mesh(legGeo, clothesMat));
 
