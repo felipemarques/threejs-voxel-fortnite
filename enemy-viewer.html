@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enemy Viewer - Animation Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            min-width: 250px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .controls h2 {
+            margin-bottom: 15px;
+            color: #ffd166;
+            font-size: 18px;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #64dfdf;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+
+        .btn.active {
+            background: #ffd166;
+            color: #000;
+        }
+
+        .slider-group {
+            margin: 10px 0;
+        }
+
+        .slider-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        .slider-group input[type="range"] {
+            width: 100%;
+        }
+
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-size: 12px;
+        }
+
+        .zombie-label {
+            position: absolute;
+            color: white;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            font-size: 14px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <div class="controls">
+        <h2>🧟 Enemy Animation Viewer</h2>
+
+        <div class="control-group">
+            <h3>Animation State</h3>
+            <button class="btn" data-anim="idle">Idle</button>
+            <button class="btn active" data-anim="walk">Walk</button>
+            <button class="btn" data-anim="attack">Attack</button>
+            <button class="btn" data-anim="jump">Jump (Simulation)</button>
+        </div>
+
+        <div class="control-group">
+            <h3>Camera Controls</h3>
+            <button class="btn" onclick="resetCamera()">Reset Camera</button>
+            <button class="btn" onclick="toggleRotation()">Toggle Auto-Rotate</button>
+        </div>
+
+        <div class="control-group">
+            <h3>Animation Speed</h3>
+            <div class="slider-group">
+                <label>Speed: <span id="speed-value">1.0</span>x</label>
+                <input type="range" id="anim-speed" min="0.1" max="3" step="0.1" value="1.0">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>Zombie Types</h3>
+            <p style="font-size: 11px; opacity: 0.7; margin-bottom: 10px;">
+                All 4 types displayed side by side
+            </p>
+            <div style="font-size: 11px; line-height: 1.6;">
+                <div>🟣 Normal Zombie</div>
+                <div>🟢 Fat Zombie</div>
+                <div>🟣 Big Zombie</div>
+                <div>⚫ Slenderman</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info">
+        <strong>Controls:</strong><br>
+        • Mouse drag to rotate camera<br>
+        • Scroll to zoom<br>
+        • Click animation buttons to test
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { createNormalZombie } from './src/objects/normalZombieElement.js';
+        import { createFatZombie } from './src/objects/fatZombieElement.js';
+        import { createBigZombie } from './src/objects/bigZombieElement.js';
+        import { createSlenderman } from './src/objects/slendermanElement.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x2d3436);
+        scene.fog = new THREE.Fog(0x2d3436, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 12);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 2, 0);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        scene.add(directionalLight);
+
+        const pointLight = new THREE.PointLight(0xff6b6b, 0.5);
+        pointLight.position.set(-5, 5, -5);
+        scene.add(pointLight);
+
+        // Ground
+        const groundGeo = new THREE.PlaneGeometry(30, 30);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x3d5a80,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Grid
+        const gridHelper = new THREE.GridHelper(30, 30, 0x64dfdf, 0x293241);
+        scene.add(gridHelper);
+
+        // Enemy wrapper class for animation
+        class EnemyWrapper {
+            constructor(zombieData, zombieType) {
+                this.mesh = zombieData.mesh;
+                this.leftArmPivot = zombieData.leftArmPivot;
+                this.rightArmPivot = zombieData.rightArmPivot;
+                this.leftLegPivot = zombieData.leftLegPivot;
+                this.rightLegPivot = zombieData.rightLegPivot;
+                this.zombieType = zombieType;
+                this.baseY = zombieData.mesh.position.y;
+
+                this.animTime = 0;
+                this.jumpVelocity = 0;
+                this.isJumping = false;
+            }
+
+            updateAnimation(dt, state) {
+                if (state === 'idle') {
+                    this.animateIdle(dt);
+                } else if (state === 'walk') {
+                    this.animateWalk(dt);
+                } else if (state === 'attack') {
+                    this.animateAttack(dt);
+                } else if (state === 'jump') {
+                    this.animateJump(dt);
+                }
+            }
+
+            animateIdle(dt) {
+                // Reset rotations to neutral with slight bobbing
+                if (this.leftArmPivot) this.leftArmPivot.rotation.x = Math.sin(this.animTime) * 0.1;
+                if (this.rightArmPivot) this.rightArmPivot.rotation.x = -Math.sin(this.animTime) * 0.1;
+                if (this.leftLegPivot) this.leftLegPivot.rotation.x = 0;
+                if (this.rightLegPivot) this.rightLegPivot.rotation.x = 0;
+
+                // Slight bobbing
+                this.mesh.position.y = this.baseY + Math.sin(this.animTime * 2) * 0.05;
+            }
+
+            animateWalk(dt) {
+                const angle = Math.sin(this.animTime) * 0.5;
+                if (this.leftLegPivot) this.leftLegPivot.rotation.x = angle;
+                if (this.rightLegPivot) this.rightLegPivot.rotation.x = -angle;
+                if (this.leftArmPivot) this.leftArmPivot.rotation.x = -angle * 0.8;
+                if (this.rightArmPivot) this.rightArmPivot.rotation.x = angle * 0.8;
+
+                // Walking bobbing
+                this.mesh.position.y = this.baseY + Math.abs(Math.sin(this.animTime)) * 0.1;
+            }
+
+            animateAttack(dt) {
+                const progress = (Math.sin(this.animTime * 3) + 1) / 2;
+                const attackAngle = -Math.PI / 2.2 * progress;
+
+                if (this.leftArmPivot) this.leftArmPivot.rotation.x = attackAngle;
+                if (this.rightArmPivot) this.rightArmPivot.rotation.x = attackAngle;
+                if (this.leftLegPivot) this.leftLegPivot.rotation.x = 0;
+                if (this.rightLegPivot) this.rightLegPivot.rotation.x = 0;
+            }
+
+            animateJump(dt) {
+                // Simulate jump physics
+                if (!this.isJumping) {
+                    this.jumpVelocity = 5;
+                    this.isJumping = true;
+                }
+
+                this.jumpVelocity -= 9.8 * dt;
+                this.mesh.position.y += this.jumpVelocity * dt;
+
+                if (this.mesh.position.y <= this.baseY) {
+                    this.mesh.position.y = this.baseY;
+                    this.jumpVelocity = 0;
+                    this.isJumping = false;
+                }
+
+                // Arms up during jump
+                const jumpArmAngle = -Math.PI / 4;
+                if (this.leftArmPivot) this.leftArmPivot.rotation.x = jumpArmAngle;
+                if (this.rightArmPivot) this.rightArmPivot.rotation.x = jumpArmAngle;
+
+                // Legs together
+                if (this.leftLegPivot) this.leftLegPivot.rotation.x = Math.PI / 6;
+                if (this.rightLegPivot) this.rightLegPivot.rotation.x = Math.PI / 6;
+            }
+        }
+
+        // Create enemies using the new modules
+        const enemies = [];
+        const zombieConfigs = [
+            { type: 'normal', x: -6, label: 'Normal Zombie', createFn: createNormalZombie },
+            { type: 'fat', x: -2, label: 'Fat Zombie', createFn: createFatZombie },
+            { type: 'big', x: 2, label: 'Big Zombie', createFn: createBigZombie },
+            { type: 'slender', x: 6, label: 'Slenderman', createFn: createSlenderman }
+        ];
+
+        zombieConfigs.forEach(({ type, x, label, createFn }) => {
+            const zombieData = createFn(scene, x, 0, 0);
+            const wrapper = new EnemyWrapper(zombieData, type);
+            enemies.push(wrapper);
+
+            // Add label
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'zombie-label';
+            labelDiv.textContent = label;
+            labelDiv.id = `label-${type}`;
+            document.getElementById('canvas-container').appendChild(labelDiv);
+        });
+
+        // Animation state
+        let currentAnimation = 'walk';
+        let animSpeed = 1.0;
+        let autoRotate = false;
+
+        // UI Controls
+        document.querySelectorAll('[data-anim]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-anim]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentAnimation = btn.dataset.anim;
+            });
+        });
+
+        document.getElementById('anim-speed').addEventListener('input', (e) => {
+            animSpeed = parseFloat(e.target.value);
+            document.getElementById('speed-value').textContent = animSpeed.toFixed(1);
+        });
+
+        window.resetCamera = () => {
+            camera.position.set(0, 3, 12);
+            controls.target.set(0, 2, 0);
+        };
+
+        window.toggleRotation = () => {
+            autoRotate = !autoRotate;
+            controls.autoRotate = autoRotate;
+            controls.autoRotateSpeed = 2.0;
+        };
+
+        // Update label positions
+        function updateLabels() {
+            enemies.forEach((enemy) => {
+                const vector = enemy.mesh.position.clone();
+                const yOffset = enemy.zombieType === 'slender' ? 3.5 :
+                    enemy.zombieType === 'big' ? 5 : 2.5;
+                vector.y += yOffset;
+                vector.project(camera);
+
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-(vector.y * 0.5) + 0.5) * window.innerHeight;
+
+                const label = document.getElementById(`label-${enemy.zombieType}`);
+                if (label) {
+                    label.style.left = x + 'px';
+                    label.style.top = y + 'px';
+                }
+            });
+        }
+
+        // Animation loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = clock.getDelta() * animSpeed;
+
+            enemies.forEach(enemy => {
+                enemy.animTime += dt * 10;
+                enemy.updateAnimation(dt, currentAnimation);
+            });
+
+            controls.update();
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>

@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import deathSfx from './assets/mixkit-kill-blood-zombie.ogg';
 import zombieGroanSfx from './assets/zombie.ogg';
+import { createNormalZombie } from './objects/normalZombieElement.js';
+import { createFatZombie } from './objects/fatZombieElement.js';
+import { createBigZombie } from './objects/bigZombieElement.js';
+import { createSlenderman } from './objects/slendermanElement.js';
 
 export class EnemyManager {
     constructor(scene, player, world, settings) {
@@ -275,9 +279,6 @@ class Bot {
     }
 
     createMesh() {
-        this.mesh = new THREE.Group();
-        this.mesh.position.copy(this.position);
-        
         // Set name based on zombie type
         let zombieName = 'Zombie';
         if (this.isBig) {
@@ -287,180 +288,36 @@ class Bot {
         } else if (this.zombieType === 'slender') {
             zombieName = 'Slenderman';
         }
-        
-        this.mesh.userData = { gameId: Math.random().toString(36).substr(2, 9).toUpperCase(), gameName: zombieName };
-        if (this.isBig) {
-            this.mesh.scale.set(2, 2, 2);
-        }
-        this.scene.add(this.mesh);
 
-        // Slenderman has completely different appearance
+        // Use the appropriate module to create the zombie mesh
+        let zombieData;
+        const x = this.position.x;
+        const y = this.position.y;
+        const z = this.position.z;
+
         if (this.zombieType === 'slender') {
-            this.createSlendermanMesh();
-            return;
+            zombieData = createSlenderman(this.scene, x, y, z);
+        } else if (this.isBig) {
+            zombieData = createBigZombie(this.scene, x, y, z);
+        } else if (this.zombieType === 'fat') {
+            zombieData = createFatZombie(this.scene, x, y, z);
+        } else {
+            zombieData = createNormalZombie(this.scene, x, y, z);
         }
 
-        // Choose skin color based on zombie type
-        const skinColor = this.zombieType === 'fat' ? 0x4a7c59 : 0x8e44ad; // Green for fat, purple for normal/big
-        const skinMat = new THREE.MeshStandardMaterial({ color: skinColor }); // Green for FatZombie, Purple for others
-        const clothesMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
+        // Extract data from the module
+        this.mesh = zombieData.mesh;
+        this.leftArmPivot = zombieData.leftArmPivot;
+        this.rightArmPivot = zombieData.rightArmPivot;
+        this.leftLegPivot = zombieData.leftLegPivot;
+        this.rightLegPivot = zombieData.rightLegPivot;
 
-        // Adjust proportions for FatZombie
-        const isFat = this.zombieType === 'fat';
-        const headScale = isFat ? 1.3 : 1.0;
-        const bodyWidthScale = isFat ? 1.6 : 1.0;
-        const bodyDepthScale = isFat ? 1.4 : 1.0;
-        const armThicknessScale = isFat ? 1.3 : 1.0;
-        const legThicknessScale = isFat ? 1.4 : 1.0;
+        // Set userData
+        this.mesh.userData = { 
+            gameId: Math.random().toString(36).substr(2, 9).toUpperCase(), 
+            gameName: zombieName 
+        };
 
-        // Head + face details
-        const headSize = 0.5 * headScale;
-        const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize * 0.9, headSize), skinMat);
-        head.position.y = 1.75;
-        this.mesh.add(head);
-        
-        // Eyes (glowing) - scale with head for FatZombie
-        const eyeMat = new THREE.MeshStandardMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8, roughness: 0.2 });
-        const eyeScale = isFat ? 1.2 : 1.0;
-        const eyeGeo = new THREE.BoxGeometry(0.12 * eyeScale, 0.08 * eyeScale, 0.02);
-        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-        leftEye.position.set(-0.12 * headScale, 0.05, 0.26 * headScale);
-        const rightEye = leftEye.clone();
-        rightEye.position.x = 0.12 * headScale;
-        head.add(leftEye);
-        head.add(rightEye);
-        
-        // Mouth (jagged) - scale with head for FatZombie
-        const mouthMat = new THREE.MeshStandardMaterial({ color: 0x0d0d0d, emissive: 0x330000, emissiveIntensity: 0.4 });
-        const mouthScale = isFat ? 1.3 : 1.0;
-        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.24 * mouthScale, 0.08 * mouthScale, 0.04), mouthMat);
-        mouth.position.set(0, -0.14 * headScale, 0.25 * headScale);
-        head.add(mouth);
-        
-        // Teeth accents - scale with mouth for FatZombie
-        const toothMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.3 });
-        const toothGeo = new THREE.BoxGeometry(0.05 * mouthScale, 0.06 * mouthScale, 0.02);
-        for (let i = -1; i <= 1; i += 2) {
-            const tooth = new THREE.Mesh(toothGeo, toothMat);
-            tooth.position.set(i * 0.06 * mouthScale, -0.05, 0.04);
-            mouth.add(tooth);
-        }
-
-        // Body - wider and deeper for FatZombie
-        const bodyWidth = 0.6 * bodyWidthScale;
-        const bodyDepth = 0.3 * bodyDepthScale;
-        const bodyHeight = isFat ? 0.9 : 0.8; // Slightly taller body for fat zombie
-        const body = new THREE.Mesh(new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth), clothesMat);
-        body.position.y = isFat ? 1.05 : 1.1;
-        this.mesh.add(body);
-        
-        // Add belly for FatZombie
-        if (isFat) {
-            const bellyGeo = new THREE.SphereGeometry(0.45, 8, 8);
-            const belly = new THREE.Mesh(bellyGeo, clothesMat);
-            belly.position.y = 0.9;
-            belly.position.z = 0.25;
-            belly.scale.set(1.1, 1.0, 0.9);
-            this.mesh.add(belly);
-        }
-
-        // Arms - Pivots (thicker for FatZombie)
-        const armWidth = 0.2 * armThicknessScale;
-        const armDepth = 0.2 * armThicknessScale;
-        const armGeo = new THREE.BoxGeometry(armWidth, 0.8, armDepth);
-        armGeo.translate(0, -0.3, 0);
-
-        this.leftArmPivot = new THREE.Group();
-        const leftArmX = isFat ? -0.55 : -0.45;
-        this.leftArmPivot.position.set(leftArmX, 1.4, 0);
-        this.mesh.add(this.leftArmPivot);
-        this.leftArmPivot.add(new THREE.Mesh(armGeo, skinMat));
-
-        this.rightArmPivot = new THREE.Group();
-        const rightArmX = isFat ? 0.55 : 0.45;
-        this.rightArmPivot.position.set(rightArmX, 1.4, 0);
-        this.mesh.add(this.rightArmPivot);
-        this.rightArmPivot.add(new THREE.Mesh(armGeo, skinMat));
-
-        // Legs - Pivots (thicker for FatZombie)
-        const legWidth = 0.25 * legThicknessScale;
-        const legDepth = 0.25 * legThicknessScale;
-        const legGeo = new THREE.BoxGeometry(legWidth, 0.8, legDepth);
-        legGeo.translate(0, -0.4, 0);
-
-        this.leftLegPivot = new THREE.Group();
-        const legSpacing = isFat ? 0.2 : 0.15;
-        this.leftLegPivot.position.set(-legSpacing, 0.7, 0);
-        this.mesh.add(this.leftLegPivot);
-        this.leftLegPivot.add(new THREE.Mesh(legGeo, clothesMat));
-
-        this.rightLegPivot = new THREE.Group();
-        this.rightLegPivot.position.set(legSpacing, 0.7, 0);
-        this.mesh.add(this.rightLegPivot);
-        this.rightLegPivot.add(new THREE.Mesh(legGeo, clothesMat));
-
-        this.mesh.castShadow = true;
-        this.mesh.receiveShadow = true;
-        
-        this.animTime = 0;
-        this.attackAnimTime = 0;
-        this.attackAnimDuration = 0.5;
-
-        this.createHealthBar();
-    }
-
-    createSlendermanMesh() {
-        // Slenderman: tall, thin, black suit, faceless, long arms
-        const suitMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.8, metalness: 0.1 });
-        const skinMat = new THREE.MeshStandardMaterial({ color: 0xf5f5dc, roughness: 0.3 }); // Pale beige skin
-        const tieMat = new THREE.MeshStandardMaterial({ color: 0xcc0000, roughness: 0.6 }); // Red tie
-
-        // Faceless head (smooth, no features)
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.4), skinMat);
-        head.position.y = 2.4; // Higher position for tall character
-        this.mesh.add(head);
-
-        // Body (tall and thin)
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.25), suitMat);
-        body.position.y = 1.5;
-        this.mesh.add(body);
-
-        // Red tie
-        const tie = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.8, 0.05), tieMat);
-        tie.position.set(0, 1.5, 0.14);
-        this.mesh.add(tie);
-
-        // Long thin arms - Pivots (tentacle-like)
-        const armGeo = new THREE.BoxGeometry(0.12, 1.2, 0.12); // Longer, thinner arms
-        armGeo.translate(0, -0.5, 0);
-
-        this.leftArmPivot = new THREE.Group();
-        this.leftArmPivot.position.set(-0.35, 2.0, 0);
-        this.mesh.add(this.leftArmPivot);
-        this.leftArmPivot.add(new THREE.Mesh(armGeo, suitMat));
-
-        this.rightArmPivot = new THREE.Group();
-        this.rightArmPivot.position.set(0.35, 2.0, 0);
-        this.mesh.add(this.rightArmPivot);
-        this.rightArmPivot.add(new THREE.Mesh(armGeo, suitMat));
-
-        // Legs - Pivots (long and thin)
-        const legGeo = new THREE.BoxGeometry(0.18, 1.0, 0.18);
-        legGeo.translate(0, -0.5, 0);
-
-        this.leftLegPivot = new THREE.Group();
-        this.leftLegPivot.position.set(-0.12, 0.9, 0);
-        this.mesh.add(this.leftLegPivot);
-        this.leftLegPivot.add(new THREE.Mesh(legGeo, suitMat));
-
-        this.rightLegPivot = new THREE.Group();
-        this.rightLegPivot.position.set(0.12, 0.9, 0);
-        this.mesh.add(this.rightLegPivot);
-        this.rightLegPivot.add(new THREE.Mesh(legGeo, suitMat));
-
-        this.mesh.castShadow = true;
-        this.mesh.receiveShadow = true;
-        
         this.animTime = 0;
         this.attackAnimTime = 0;
         this.attackAnimDuration = 0.5;
