@@ -81,11 +81,13 @@ Voxel Fortnite is a browser-based 3D survival game where you must eliminate all 
 - **Normal Zombie (Purple):**
   - Standard enemy with base stats
   - Appears in all combat modes
+  - Features glowing red eyes and jagged mouth with teeth
   
 - **Fat Zombie (Green):**
   - 50% more health than normal zombies
   - 50% slower movement speed
-  - Visibly larger and bulkier appearance
+  - Visibly larger and bulkier appearance with proportionally scaled facial features
+  - Prominent belly and thicker limbs
   - Spawns in 1:1 ratio with normal zombies in Arcade and Survival modes
   
 - **Big Zombie (Purple, 2x size):**
@@ -95,6 +97,17 @@ Voxel Fortnite is a browser-based 3D survival game where you must eliminate all 
   - 25% slower movement
   - Larger attack range (3.5m vs 2m)
   - Spawns at 1 per 5 total enemies (e.g., 20 enemies = 4 Big Zombies)
+
+- **Slenderman (Black suit, faceless):**
+  - **Speed Demon / Glass Cannon**
+  - 20% LESS health than normal zombies (fragile)
+  - 50% FASTER movement speed
+  - 50% MORE damage output
+  - Extended attack range (3.0m)
+  - Distinctive appearance: tall, thin, black suit with red tie, completely faceless
+  - Long tentacle-like arms
+  - Spawns at 1 per 10 total enemies in Arcade and Survival modes
+  - High risk, high reward enemy type
 
 #### Intelligent Behavior:
 - Zombies detect and chase players within 25 meters
@@ -110,7 +123,7 @@ Voxel Fortnite is a browser-based 3D survival game where you must eliminate all 
 - **Medium:** 100 HP, 5 damage, moderate speed
 - **Hard:** 150 HP, 10 damage, fast and aggressive
 
-*Note: Big Zombie and Fat Zombie stats are multiplied on top of difficulty base stats*
+*Note: Big Zombie, Fat Zombie, and Slenderman stats are multiplied on top of difficulty base stats*
 
 ### Storm Mechanics
 - **Shrinking Zone:** The safe zone gradually shrinks over time
@@ -123,6 +136,7 @@ Voxel Fortnite is a browser-based 3D survival game where you must eliminate all 
 - **Weapons:** Find better weapons to increase your firepower (including SMG/Shotgun/DMR)
 - **Ammo:** Collect ammunition for your firearms
 - **Juice Bottles:** Restore stamina
+- **MedKits (First Aid Kits):** White case with red cross, heals 25% of max health (25 HP)
 - **Backpacks:** Cosmetic pickups
 - **Interactive:** Press **E** to open chests and collect items
 
@@ -332,6 +346,7 @@ The built files will be in the `dist/` directory.
 12. **Zombie Variant Tactics:**
     - **Fat Zombies (Green):** Slower but tankier - kite them and use sustained fire
     - **Big Zombies (Purple, Large):** Extremely dangerous - maintain distance, use sniper/rifle
+    - **Slenderman (Black Suit, Faceless):** Fast and deadly but fragile - prioritize elimination, avoid extended fights, keep moving
     - **Normal Zombies (Purple):** Standard threat - any weapon works effectively
     
 13. **Sky Loot System:** Once activated, stay alive for 45-second intervals to receive supply drops near your position.
@@ -355,8 +370,10 @@ This project is open source and available for educational purposes.
 ### Latest Updates
 - **Survival Game Mode:** New hardcore mode with no storm, no vehicles, clean natural environment (trees, rocks, bushes only), and minimum 100m map size.
 - **Zombie Variants:**
-  - **Fat Zombie (Green):** 50% more health, 50% slower, bulkier appearance. Spawns 1:1 with normal zombies in Arcade/Survival.
+  - **Fat Zombie (Green):** 50% more health, 50% slower, bulkier appearance with prominent belly and scaled facial features. Spawns 1:1 with normal zombies in Arcade/Survival.
   - **Big Zombie (Purple, 2x size):** Survival-exclusive boss enemy with 5x health, 2x damage, 25% slower, larger attack range. Spawns at 1 per 5 enemies.
+  - **Slenderman (Black Suit, Faceless):** Speed demon glass cannon with tall thin body, black suit, red tie, no face. 20% less health, 50% faster, 50% more damage, 3m attack range. Spawns at 1 per 10 enemies in Arcade/Survival.
+- **MedKit Item:** First aid kit with white case and red cross. Heals 25% of max health. Found in chests, ground loot, and sky drops.
 - **Survival Timer:** Real-time survival tracking displayed in MM:SS format for Arcade and Survival modes.
 - **Sky Loot System:** Rewards players who eliminate 30%+ zombies and collect all ground loot with periodic airdrops (2-3 items every 45s).
 - **Enhanced NPC AI:** Line-of-sight checking, collision detection with environment, improved pathfinding.

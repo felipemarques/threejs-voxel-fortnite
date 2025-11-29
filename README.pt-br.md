@@ -81,11 +81,13 @@ Voxel Fortnite é um jogo de sobrevivência 3D baseado em navegador onde você d
 - **Zumbi Normal (Roxo):**
   - Inimigo padrão com stats base
   - Aparece em todos os modos de combate
+  - Possui olhos vermelhos brilhantes e boca dentada
   
 - **Zumbi Gordo (Verde):**
   - 50% mais vida que zumbis normais
   - 50% mais lento
-  - Aparência visivelmente maior e mais robusta
+  - Aparência visivelmente maior e mais robusta com características faciais proporcionalmente escaladas
+  - Barriga proeminente e membros mais grossos
   - Spawna na proporção 1:1 com zumbis normais nos modos Arcade e Survival
   
 - **Zumbi Grande (Roxo, 2x tamanho):**
@@ -95,6 +97,17 @@ Voxel Fortnite é um jogo de sobrevivência 3D baseado em navegador onde você d
   - 25% mais lento
   - Alcance de ataque maior (3.5m vs 2m)
   - Spawna na proporção de 1 a cada 5 inimigos totais (ex: 20 inimigos = 4 Zumbis Grandes)
+
+- **Slenderman (Terno preto, sem rosto):**
+  - **Demônio da Velocidade / Canhão de Vidro**
+  - 20% MENOS vida que zumbis normais (frágil)
+  - 50% MAIS RÁPIDO
+  - 50% MAIS DANO
+  - Alcance de ataque estendido (3.0m)
+  - Aparência distinta: alto, magro, terno preto com gravata vermelha, completamente sem rosto
+  - Braços longos tipo tentáculos
+  - Spawna na proporção de 1 a cada 10 inimigos totais nos modos Arcade e Survival
+  - Inimigo de alto risco e alta recompensa
 
 #### Comportamento Inteligente:
 - Zumbis detectam e perseguem jogadores dentro de 25 metros
@@ -110,7 +123,7 @@ Voxel Fortnite é um jogo de sobrevivência 3D baseado em navegador onde você d
 - **Médio:** 100 HP, 5 de dano, velocidade moderada
 - **Difícil:** 150 HP, 10 de dano, rápido e agressivo
 
-*Nota: Os stats do Zumbi Grande e Zumbi Gordo são multiplicados sobre os stats base da dificuldade*
+*Nota: Os stats do Zumbi Grande, Zumbi Gordo e Slenderman são multiplicados sobre os stats base da dificuldade*
 
 ### Mecânicas da Tempestade
 - **Zona que Encolhe:** A zona segura diminui gradualmente com o tempo
@@ -123,6 +136,7 @@ Voxel Fortnite é um jogo de sobrevivência 3D baseado em navegador onde você d
 - **Armas:** Encontre armas melhores para aumentar seu poder de fogo (incluindo SMG/Shotgun/DMR)
 - **Munição:** Colete munição para suas armas de fogo
 - **Garrafas de Stamina:** Recuperam stamina
+- **MedKits (Maletas de Primeiros Socorros):** Maleta branca com cruz vermelha, recupera 25% da vida máxima (25 HP)
 - **Mochilas:** Colecionáveis cosméticos
 - **Interativo:** Pressione **E** para abrir baús e coletar itens
 
@@ -332,6 +346,7 @@ Os arquivos compilados estarão no diretório `dist/`.
 12. **Táticas para Variantes de Zumbi:**
     - **Zumbis Gordos (Verde):** Mais lentos mas mais resistentes - fuja deles e use fogo sustentado
     - **Zumbis Grandes (Roxo, Grande):** Extremamente perigosos - mantenha distância, use sniper/rifle
+    - **Slenderman (Terno Preto, Sem Rosto):** Rápido e mortal mas frágil - priorize eliminação, evite lutas prolongadas, continue se movendo
     - **Zumbis Normais (Roxo):** Ameaça padrão - qualquer arma funciona efetivamente
     
 13. **Sistema de Loot do Céu:** Uma vez ativado, sobreviva por intervalos de 45 segundos para receber drops de suprimentos perto da sua posição.
@@ -355,8 +370,10 @@ Este projeto é open source e disponível para fins educacionais.
 ### Últimas Atualizações
 - **Modo Survival:** Novo modo hardcore sem tempestade, sem veículos, ambiente natural limpo (apenas árvores, rochas e arbustos), e tamanho mínimo de mapa de 100m.
 - **Variantes de Zumbi:**
-  - **Zumbi Gordo (Verde):** 50% mais vida, 50% mais lento, aparência mais robusta. Spawna 1:1 com zumbis normais em Arcade/Survival.
+  - **Zumbi Gordo (Verde):** 50% mais vida, 50% mais lento, aparência mais robusta com barriga proeminente e características faciais escaladas. Spawna 1:1 com zumbis normais em Arcade/Survival.
   - **Zumbi Grande (Roxo, 2x tamanho):** Inimigo chefe exclusivo do Survival com 5x vida, 2x dano, 25% mais lento, alcance de ataque maior. Spawna 1 a cada 5 inimigos.
+  - **Slenderman (Terno Preto, Sem Rosto):** Demônio da velocidade tipo canhão de vidro com corpo alto e magro, terno preto, gravata vermelha, sem rosto. 20% menos vida, 50% mais rápido, 50% mais dano, alcance de ataque de 3m. Spawna 1 a cada 10 inimigos em Arcade/Survival.
+- **Item MedKit:** Maleta de primeiros socorros com caixa branca e cruz vermelha. Cura 25% da vida máxima. Encontrado em baús, loot do chão e drops do céu.
 - **Timer de Sobrevivência:** Rastreamento de sobrevivência em tempo real exibido no formato MM:SS para modos Arcade e Survival.
 - **Sistema de Loot do Céu:** Recompensa jogadores que eliminam 30%+ dos zumbis e coletam todo o loot do chão com airdrops periódicos (2-3 itens a cada 45s).
 - **IA de NPC Aprimorada:** Verificação de linha de visão, detecção de colisão com ambiente, pathfinding melhorado.
