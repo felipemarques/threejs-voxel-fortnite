@@ -5,6 +5,7 @@ import { createNormalZombie } from './objects/normalZombieElement.js';
 import { createFatZombie } from './objects/fatZombieElement.js';
 import { createBigZombie } from './objects/bigZombieElement.js';
 import { createSlenderman } from './objects/slendermanElement.js';
+import { createSpider } from './objects/spiderElement.js';
 
 export class EnemyManager {
     constructor(scene, player, world, settings) {

@@ -1562,11 +1562,13 @@ Constraints: numbers are in meters, keep |x|,|z| <= 150, size in [0.2, 40]. No f
                 
                 // Check if we clicked on an NPC
                 if (this.enemyManager && this.enemyManager.enemies) {
+                    console.log('Remove NPC: Checking', this.enemyManager.enemies.length, 'enemies');
                     for (let i = this.enemyManager.enemies.length - 1; i >= 0; i--) {
                         const enemy = this.enemyManager.enemies[i];
                         if (enemy.mesh) {
                             const hits = ray.intersectObject(enemy.mesh, true);
                             if (hits.length > 0) {
+                                console.log('Hit enemy', i, 'removing...');
                                 // Remove this NPC
                                 this.scene.remove(enemy.mesh);
                                 this.enemyManager.enemies.splice(i, 1);
