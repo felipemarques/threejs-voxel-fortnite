@@ -1,1 +1,0 @@
-import{G as h,M as c,a as d,S as M}from"./three.module-BS1HX5LR.js";function m(o=1){const r=new h,e=new c({color:2924588,roughness:1}),s=2+Math.floor(Math.random()*3);for(let a=0;a<s;a++){const n=(1.2+Math.random()*1)*o,t=new d(new M(n,6,6),e);t.position.set((Math.random()-.5)*1.2*o,n*.65,(Math.random()-.5)*1.2*o),t.castShadow=!0,r.add(t)}return r}export{m as createBush};
