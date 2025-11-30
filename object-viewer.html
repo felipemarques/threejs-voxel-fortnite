@@ -446,6 +446,45 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { objectRegistry } from './src/objects/objectRegistry.js';
 
+        // Static imports for build compatibility
+        import * as playerMod from './src/objects/playerElement.js';
+        import * as femalePlayerMod from './src/objects/femalePlayerElement.js';
+        import * as vehicleMod from './src/objects/vehicleElement.js';
+        import * as busMod from './src/objects/busElement.js';
+        import * as motorcycleMod from './src/objects/motorcycleElement.js';
+        import * as normalZombieMod from './src/objects/normalZombieElement.js';
+        import * as fatZombieMod from './src/objects/fatZombieElement.js';
+        import * as bigZombieMod from './src/objects/bigZombieElement.js';
+        import * as slendermanMod from './src/objects/slendermanElement.js';
+        import * as spiderMod from './src/objects/spiderElement.js';
+        import * as houseMod from './src/objects/houseElement.js';
+        import * as smallBuildingMod from './src/objects/smallBuildingElement.js';
+        import * as plateauMod from './src/objects/plateauElement.js';
+        import * as rockMod from './src/objects/rockElement.js';
+        import * as treeOakMod from './src/objects/treeOakElement.js';
+        import * as treeAlpineMod from './src/objects/treeAlpineElement.js';
+        import * as bushMod from './src/objects/bushElement.js';
+
+        const moduleMap = {
+            './src/objects/playerElement.js': playerMod,
+            './src/objects/femalePlayerElement.js': femalePlayerMod,
+            './src/objects/vehicleElement.js': vehicleMod,
+            './src/objects/busElement.js': busMod,
+            './src/objects/motorcycleElement.js': motorcycleMod,
+            './src/objects/normalZombieElement.js': normalZombieMod,
+            './src/objects/fatZombieElement.js': fatZombieMod,
+            './src/objects/bigZombieElement.js': bigZombieMod,
+            './src/objects/slendermanElement.js': slendermanMod,
+            './src/objects/spiderElement.js': spiderMod,
+            './src/objects/houseElement.js': houseMod,
+            './src/objects/smallBuildingElement.js': smallBuildingMod,
+            './src/objects/plateauElement.js': plateauMod,
+            './src/objects/rockElement.js': rockMod,
+            './src/objects/treeOakElement.js': treeOakMod,
+            './src/objects/treeAlpineElement.js': treeAlpineMod,
+            './src/objects/bushElement.js': bushMod
+        };
+
         // --- Scene Setup ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x2d3436);
@@ -739,8 +778,9 @@
             clearCurrentObjects();
 
             try {
-                // Dynamic import
-                const module = await import(objDef.module);
+                // Use static module map
+                const module = moduleMap[objDef.module];
+                if (!module) throw new Error(`Module not found in map: ${objDef.module}`);
                 const createFn = module[objDef.createFn];
 
                 if (!createFn) throw new Error(`Function ${objDef.createFn} not found in module`);
