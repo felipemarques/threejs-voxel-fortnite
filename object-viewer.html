@@ -252,10 +252,10 @@
             border-radius: 4px;
         }
     </style>
-  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/object-viewer-DRw4J2pi.js"></script>
-  <link rel="modulepreload" crossorigin href="/threejs-voxel-firecraft/dist/assets/slendermanElement-C-gf9PPq.js">
-  <link rel="modulepreload" crossorigin href="/threejs-voxel-firecraft/dist/assets/spiderElement-Du5wmdeG.js">
-  <link rel="modulepreload" crossorigin href="/threejs-voxel-firecraft/dist/assets/OrbitControls-Bnl08Rmj.js">
+  <script type="module" crossorigin src="/threejs-voxel-firecraft/dist/assets/object-viewer-DE5H_5Si.js"></script>
+  <link rel="modulepreload" crossorigin href="/threejs-voxel-firecraft/dist/assets/slendermanElement-5duizSjO.js">
+  <link rel="modulepreload" crossorigin href="/threejs-voxel-firecraft/dist/assets/spiderElement-CzOL8jDE.js">
+  <link rel="modulepreload" crossorigin href="/threejs-voxel-firecraft/dist/assets/OrbitControls-CBHEahkU.js">
 </head>
 
 <body>
@@ -437,6 +437,20 @@
             <label>Lighting</label>
             <div class="btn-group">
                 <button onclick="toggleDayNight()">Day/Night</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Debug</label>
+            <div style="margin-top: 8px;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                    <input type="checkbox" id="show-bounding-box" onchange="toggleBoundingBox()"
+                        style="margin-right: 8px;">
+                    Show Bounding Box
+                </label>
+            </div>
+            <div style="margin-top: 10px; border-top: 1px solid #555; padding-top: 10px;">
+                <button onclick="exportGLTF()" style="width: 100%; background: #e67e22;">Export GLTF</button>
             </div>
         </div>
     </div>
