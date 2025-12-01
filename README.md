@@ -1,12 +1,12 @@
-# Voxel Fortnite
+# Voxel Firecraft
 
-A voxel-style battle royale game inspired by Fortnite, built with Three.js. Survive against AI enemies in a shrinking storm zone while managing your resources and exploring the procedurally generated world. Also includes Arena (fast skirmish), Matrix (sandbox without enemies) and Studio (build mode) variants.
+A voxel-style battle royale game inspired by Firecraft, built with Three.js. Survive against AI enemies in a shrinking storm zone while managing your resources and exploring the procedurally generated world. Also includes Arena (fast skirmish), Matrix (sandbox without enemies) and Studio (build mode) variants.
 
 ![Main Menu](docs/main-screen.jpg)
 
 ## 🎮 Game Overview
 
-Voxel Fortnite is a browser-based 3D survival game where you must eliminate all enemies before the storm closes in. The game features voxel-style graphics reminiscent of Minecraft, combined with battle royale mechanics similar to Fortnite.
+Voxel Firecraft is a browser-based 3D survival game where you must eliminate all enemies before the storm closes in. The game features voxel-style graphics reminiscent of Minecraft, combined with battle royale mechanics similar to Firecraft.
 
 ![Gameplay](docs/game-demo-1.jpg)
 
@@ -323,8 +323,8 @@ When debug mode is enabled:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/felipemarques/threejs-voxel-fortnite.git
-cd voxel-fortnite
+git clone https://github.com/felipemarques/threejs-voxel-Firecraft.git
+cd voxel-Firecraft
 ```
 
 2. Install dependencies:
@@ -389,7 +389,7 @@ This project is open source and available for educational purposes.
 
 ## 🙏 Acknowledgments
 
-- Inspired by Fortnite (Epic Games)
+- Inspired by Firecraft (Epic Games)
 - Voxel aesthetics inspired by Minecraft (Mojang)
 - Built with Three.js library
 
