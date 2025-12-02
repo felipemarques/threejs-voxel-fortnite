@@ -383,9 +383,9 @@ export class MultiplayerClient {
             rotToSend = this._wrapAngle(viewYaw);
             fwd = { x: Math.sin(rotToSend), z: Math.cos(rotToSend) };
         }
-        // Align model forward (+Z) with camera forward (-Z)
-        rotToSend = this._wrapAngle(rotToSend + Math.PI);
-        fwd = { x: Math.sin(rotToSend), z: Math.cos(rotToSend) };
+        // NOTE: Removed Math.PI offset that was causing inverted facing
+        // rotToSend = this._wrapAngle(rotToSend + Math.PI);
+        // fwd = { x: Math.sin(rotToSend), z: Math.cos(rotToSend) };
         const payload = {
             type: 'state',
             pos: { x: pos.x, y: pos.y, z: pos.z },
@@ -659,9 +659,9 @@ export class MultiplayerClient {
                 mesh.position.copy(this._tmpVec);
                 if (mesh.rotation) {
                     if (typeof latest.rot === 'number') {
-                        mesh.rotation.y = this._wrapAngle(latest.rot + this.remoteFaceOffset);
+                        mesh.rotation.y = this._wrapAngle(latest.rot); // Removed remoteFaceOffset
                     } else if (latest.fwd && typeof latest.fwd.x === 'number' && typeof latest.fwd.z === 'number') {
-                        mesh.rotation.y = this._wrapAngle(Math.atan2(latest.fwd.x, latest.fwd.z) + this.remoteFaceOffset);
+                        mesh.rotation.y = this._wrapAngle(Math.atan2(latest.fwd.x, latest.fwd.z)); // Removed remoteFaceOffset
                     }
                 }
                 this.applyRemoteAnimation(mesh, latest.anim);
@@ -692,8 +692,9 @@ export class MultiplayerClient {
             const baseYawB = typeof b.rot === 'number'
                 ? b.rot
                 : (typeof b.fwd?.x === 'number' && typeof b.fwd?.z === 'number' ? Math.atan2(b.fwd.x, b.fwd.z) : baseYawA);
-            const yawA = baseYawA + this.remoteFaceOffset;
-            const yawB = baseYawB + this.remoteFaceOffset;
+            // Removed remoteFaceOffset adjustments
+            const yawA = baseYawA;
+            const yawB = baseYawB;
             const wrapAngle = (ang) => {
                 while (ang > Math.PI) ang -= Math.PI * 2;
                 while (ang < -Math.PI) ang += Math.PI * 2;
@@ -701,7 +702,8 @@ export class MultiplayerClient {
             };
             const deltaYaw = yawB - yawA;
             const interpYaw = yawA + deltaYaw * alpha;
-            if (mesh.rotation) mesh.rotation.y = wrapAngle(interpYaw + this.remoteFaceOffset);
+            if (mesh.rotation) mesh.rotation.y = wrapAngle(interpYaw); // Removed remoteFaceOffset
+
 
             // Interpolate simple limb rotations
             const lerpVal = (x1, x2) => {
