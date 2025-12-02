@@ -15,6 +15,7 @@ import { createPlateauElement } from './objects/plateauElement.js';
 import { createVehicleElement } from './objects/vehicleElement.js';
 import { createBus } from './objects/busElement.js';
 import { createMotorcycle } from './objects/motorcycleElement.js';
+import { InstanceManager } from './graphics/InstanceManager.js';
 
 export const DEFAULT_MAP_SIZE = 400;
 
@@ -41,6 +42,9 @@ export class World {
 
         this.safeZoneCenter = new THREE.Vector3(0, 0, 0);
         
+        this.instanceManager = new InstanceManager(this.scene);
+        this.useInstancing = this.gameMode !== 'studio' && this.gameMode !== 'matrix' && this.gameMode !== 'matrix-ai';
+
         this.init();
     }
 
@@ -60,8 +64,64 @@ export class World {
         } else {
             this.createEnvironment();
         }
+        
+        if (this.useInstancing) {
+            const meshes = this.instanceManager.build();
+            // Add instanced meshes to objects list for Raycasting (Shooting)
+            meshes.forEach(mesh => {
+                this.objects.push(mesh);
+            });
+        }
+
         if (this.gameMode !== 'matrix' && this.gameMode !== 'studio') {
             if (this.stormEnabled) this.createStormVisuals();
+        }
+    }
+
+    addWorldObject(type, proto, x, y, z, scale = 1, rotationY = 0, userData = {}) {
+        const pos = new THREE.Vector3(x, y, z);
+        const rot = new THREE.Euler(0, rotationY, 0);
+        const scl = new THREE.Vector3(scale, scale, scale);
+
+        if (this.useInstancing) {
+            this.instanceManager.addInstance(type, proto, pos, rot, scl, userData);
+            
+            // Create Ghost Object for Collision (Distance checks)
+            // We don't add this to the scene, only to this.objects
+            const ghost = new THREE.Object3D();
+            ghost.position.copy(pos);
+            ghost.rotation.copy(rot);
+            ghost.scale.copy(scl);
+            ghost.userData = { ...userData };
+            
+            // Approximate radius for collision if not provided
+            if (!ghost.userData.radius) {
+                if (type.includes('Tree')) ghost.userData.radius = 1.0;
+                else if (type.includes('Rock')) ghost.userData.radius = 1.5;
+                else if (type.includes('Bush')) ghost.userData.radius = 1.0;
+            }
+            
+            this.objects.push(ghost);
+            return ghost;
+        } else {
+            // Fallback to standard Mesh (Studio mode)
+            // We need to clone the prototype because we are modifying it
+            // Actually, the prototype might be a complex group.
+            // For Studio, we might just call the original creator functions inline to get unique geometry if needed,
+            // but here we are trying to unify.
+            // Let's assume for Studio we might just clone the proto.
+            const clone = proto.clone();
+            clone.position.copy(pos);
+            clone.rotation.copy(rot);
+            clone.scale.copy(scl);
+            clone.userData = { ...userData, gameId: this.generateID() };
+            
+            // Fix materials on clone if needed (cloning doesn't always clone materials unique instances)
+            // But for Studio it's fine.
+            
+            this.scene.add(clone);
+            this.objects.push(clone);
+            return clone;
         }
     }
 
@@ -136,55 +196,64 @@ export class World {
         this.scene.add(ground);
         this.objects.push(ground);
 
+        // Prototypes for Instancing
+        const protoOak = this.createTree(0, 0, 'Oak');
+        const protoPine = this.createTree(0, 0, 'Pine');
+        const protoRock = this.createRock(0, 0);
+        const protoRockPillar = this.createRockPillar(0, 0);
+        const protoFlatBoulder = this.createFlatBoulder(0, 0);
+        const protoCrystal = this.createCrystalShard(0, 0);
+        const protoStacked = this.createStackedRock(0, 0);
+        const protoBasalt = this.createBasaltCluster(0, 0);
+        const protoBush = this.createBush(0, 0);
+        const protoGrass = this.createGrassClump(0, 0);
+
         // Trees
         for (let i = 0; i < density.trees; i++) {
             const { x, z } = getSafePosition(0.9);
             const y = groundY(x, z);
             
             const type = Math.random() > 0.5 ? 'Oak' : 'Pine';
-            const tree = this.createTree(x, z, type);
-            tree.position.y = y;
-            tree.userData = { gameId: this.generateID(), gameName: `Tree_${type}`, type: 'tree' };
-            this.scene.add(tree);
-            this.objects.push(tree);
+            const proto = type === 'Oak' ? protoOak : protoPine;
+            // Randomize scale slightly per instance
+            const scale = 0.8 + Math.random() * 0.4;
+            const rot = Math.random() * Math.PI * 2;
+            
+            this.addWorldObject(type, proto, x, y, z, scale, rot, { gameName: `Tree_${type}`, type: 'tree' });
         }
 
         // Rocks (more variety)
-        const rockMakers = [
-            (x, z) => this.createRock(x, z),
-            (x, z, y) => this.createRockPillar(x, z, y),
-            (x, z, y) => this.createFlatBoulder(x, z, y),
-            (x, z, y) => this.createCrystalShard(x, z, y),
-            (x, z, y) => this.createStackedRock(x, z, y),
-            (x, z, y) => this.createBasaltCluster(x, z, y)
-        ];
+        const rockProtos = [protoRock, protoRockPillar, protoFlatBoulder, protoCrystal, protoStacked, protoBasalt];
+        const rockNames = ['Rock', 'RockPillar', 'FlatBoulder', 'Crystal', 'StackedRock', 'Basalt'];
+        
         for (let i = 0; i < density.rocks; i++) {
             const { x, z } = getSafePosition(0.9);
             const y = groundY(x, z);
-            const maker = rockMakers[i % rockMakers.length];
-            const rock = maker(x, z, y);
-            rock.userData = { gameId: this.generateID(), gameName: 'Rock', type: 'rock' };
-            this.scene.add(rock);
-            this.objects.push(rock);
+            const idx = i % rockProtos.length;
+            const proto = rockProtos[idx];
+            const name = rockNames[idx];
+            
+            const scale = 0.8 + Math.random() * 0.4;
+            const rot = Math.random() * Math.PI * 2;
+            
+            this.addWorldObject(name, proto, x, y, z, scale, rot, { gameName: 'Rock', type: 'rock' });
         }
+        
         // Small bushes
         for (let i = 0; i < density.bushes; i++) {
             const { x, z } = getSafePosition(0.85);
             const y = groundY(x, z);
-            const bush = this.createBush(x, z);
-            bush.position.y = y;
-            bush.userData = { gameId: this.generateID(), gameName: 'Bush' };
-            this.scene.add(bush);
-            this.objects.push(bush);
+            const scale = 0.8 + Math.random() * 0.4;
+            const rot = Math.random() * Math.PI * 2;
+            this.addWorldObject('Bush', protoBush, x, y, z, scale, rot, { gameName: 'Bush' });
         }
 
         // Scattered grass clumps across the map for texture
         for (let i = 0; i < density.grass; i++) {
             const { x, z } = getSafePosition(0.95);
             const y = groundY(x, z);
-            const g = this.createGrassClump(x, z);
-            g.position.y = y;
-            this.scene.add(g);
+            const rot = Math.random() * Math.PI * 2;
+            this.addWorldObject('Grass', protoGrass, x, y, z, 1.0, rot, { gameName: 'Grass' });
         }
         
         // Buildings
@@ -316,55 +385,61 @@ export class World {
         this.scene.add(ground);
         this.objects.push(ground);
 
+        // Prototypes for Instancing
+        const protoOak = this.createTree(0, 0, 'Oak');
+        const protoPine = this.createTree(0, 0, 'Pine');
+        const protoRock = this.createRock(0, 0);
+        const protoRockPillar = this.createRockPillar(0, 0);
+        const protoFlatBoulder = this.createFlatBoulder(0, 0);
+        const protoCrystal = this.createCrystalShard(0, 0);
+        const protoStacked = this.createStackedRock(0, 0);
+        const protoBasalt = this.createBasaltCluster(0, 0);
+        const protoBush = this.createBush(0, 0);
+        const protoGrass = this.createGrassClump(0, 0);
+
         // Trees
         for (let i = 0; i < density.trees; i++) {
             const { x, z } = getSafePosition(0.9);
             const y = groundY(x, z);
             
             const type = Math.random() > 0.5 ? 'Oak' : 'Pine';
-            const tree = this.createTree(x, z, type);
-            tree.position.y = y;
-            tree.userData = { gameId: this.generateID(), gameName: `Tree_${type}`, type: 'tree' };
-            this.scene.add(tree);
-            this.objects.push(tree);
+            const proto = type === 'Oak' ? protoOak : protoPine;
+            const scale = 0.8 + Math.random() * 0.4;
+            const rot = Math.random() * Math.PI * 2;
+            
+            this.addWorldObject(type, proto, x, y, z, scale, rot, { gameName: `Tree_${type}`, type: 'tree' });
         }
 
         // Rocks
-        const rockMakers = [
-            (x, z) => this.createRock(x, z),
-            (x, z, y) => this.createRockPillar(x, z, y),
-            (x, z, y) => this.createFlatBoulder(x, z, y),
-            (x, z, y) => this.createCrystalShard(x, z, y),
-            (x, z, y) => this.createStackedRock(x, z, y),
-            (x, z, y) => this.createBasaltCluster(x, z, y)
-        ];
+        const rockProtos = [protoRock, protoRockPillar, protoFlatBoulder, protoCrystal, protoStacked, protoBasalt];
+        const rockNames = ['Rock', 'RockPillar', 'FlatBoulder', 'Crystal', 'StackedRock', 'Basalt'];
+        
         for (let i = 0; i < density.rocks; i++) {
             const { x, z } = getSafePosition(0.9);
             const y = groundY(x, z);
-            const maker = rockMakers[i % rockMakers.length];
-            const rock = maker(x, z, y);
-            rock.userData = { gameId: this.generateID(), gameName: 'Rock', type: 'rock' };
-            this.scene.add(rock);
-            this.objects.push(rock);
+            const idx = i % rockProtos.length;
+            const proto = rockProtos[idx];
+            const name = rockNames[idx];
+            const scale = 0.8 + Math.random() * 0.4;
+            const rot = Math.random() * Math.PI * 2;
+            this.addWorldObject(name, proto, x, y, z, scale, rot, { gameName: 'Rock', type: 'rock' });
         }
+        
         // Small bushes
         for (let i = 0; i < density.bushes; i++) {
             const { x, z } = getSafePosition(0.85);
             const y = groundY(x, z);
-            const bush = this.createBush(x, z);
-            bush.position.y = y;
-            bush.userData = { gameId: this.generateID(), gameName: 'Bush' };
-            this.scene.add(bush);
-            this.objects.push(bush);
+            const scale = 0.8 + Math.random() * 0.4;
+            const rot = Math.random() * Math.PI * 2;
+            this.addWorldObject('Bush', protoBush, x, y, z, scale, rot, { gameName: 'Bush' });
         }
 
         // Scattered grass clumps across the map for texture
         for (let i = 0; i < density.grass; i++) {
             const { x, z } = getSafePosition(0.95);
             const y = groundY(x, z);
-            const g = this.createGrassClump(x, z);
-            g.position.y = y;
-            this.scene.add(g);
+            const rot = Math.random() * Math.PI * 2;
+            this.addWorldObject('Grass', protoGrass, x, y, z, 1.0, rot, { gameName: 'Grass' });
         }
     }
 
