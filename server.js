@@ -141,6 +141,9 @@ function processShoot(shooterId, roomCode, data) {
   const direction = new THREE.Vector3(data.direction.x, data.direction.y, data.direction.z);
   const raycaster = new THREE.Raycaster(shooterPos, direction.normalize());
   
+  // DEBUG LOG: Shooter info
+  console.log(`[SHOOT] ${shooterId.substring(0,8)} fired ${weaponName} from (${shooterPos.x.toFixed(1)}, ${shooterPos.y.toFixed(1)}, ${shooterPos.z.toFixed(1)}) dir:(${direction.x.toFixed(2)}, ${direction.y.toFixed(2)}, ${direction.z.toFixed(2)})`);
+  
   // Find closest hit
   let closestHit = null;
   let closestDist = Infinity;
@@ -167,9 +170,17 @@ function processShoot(shooterId, roomCode, data) {
     const damage = weaponDamage[weaponName] || 10;
     
     const target = room.playerStates.get(closestHit.targetId);
+    const prevHealth = target.health;
+    const prevShield = target.shield;
     const isDead = target.takeDamage(damage);
     
     shooter.consumeAmmo(weaponName);
+    
+    // DEBUG LOG: Hit details
+    console.log(`[HIT] ${shooterId.substring(0,8)} -> ${closestHit.targetId.substring(0,8)} (${weaponName}: ${damage} dmg, dist: ${closestDist.toFixed(2)}m)`);
+    console.log(`  Target pos: (${targetStates.get(closestHit.targetId).position.x.toFixed(1)}, ${targetStates.get(closestHit.targetId).position.y.toFixed(1)}, ${targetStates.get(closestHit.targetId).position.z.toFixed(1)})`);
+    console.log(`  Hit point: (${closestHit.point.x.toFixed(1)}, ${closestHit.point.y.toFixed(1)}, ${closestHit.point.z.toFixed(1)})`);
+    console.log(`  Health: ${prevHealth.toFixed(0)} -> ${target.health.toFixed(0)} | Shield: ${prevShield.toFixed(0)} -> ${target.shield.toFixed(0)} ${isDead ? '[DEAD]' : ''}`);
     
     // Broadcast hit confirmation to all clients
     broadcastToRoom(roomCode, {
@@ -192,8 +203,8 @@ function processShoot(shooterId, roomCode, data) {
       broadcastToRoom(roomCode, { type: 'player-dead', id: closestHit.targetId });
     }
   } else {
-    // Miss - optional feedback
-    // console.log(`[MISS] ${shooterId} (${weaponName})`);
+    // Miss - log for debugging
+    console.log(`[MISS] ${shooterId.substring(0,8)} (${weaponName})`);
   }
 }
 

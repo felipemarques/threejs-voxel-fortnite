@@ -41,6 +41,7 @@ export class MultiplayerClient {
         };
         this.lastPingSent = 0;
         this.pingInterval = 5;
+        this.showHitboxes = false; // Debug: toggle bounding boxes
         this.connect();
     }
 
@@ -271,36 +272,40 @@ export class MultiplayerClient {
         try {
             const clone = this.player.mesh.clone(true);
             const pivots = { leftArm: null, rightArm: null, leftLeg: null, rightLeg: null };
-            clone.traverse(n => {
-                if (n.isMesh) {
-                    n.castShadow = true;
-                    n.receiveShadow = true;
-                    if (n.material && n.material.clone) {
+        clone.traverse(n => {
+            if (n.isMesh) {
+                n.castShadow = true;
+                n.receiveShadow = true;
+                if (n.material && n.material.clone) {
+                    n.material = n.material.clone();
+                }
+                if (n.geometry && n.geometry.clone) {
+                    n.geometry = n.geometry.clone();
+                }
+                // Apply color override to shirt/torso
+                if (colorOverride && n.material && !Array.isArray(n.material)) {
+                    const name = (n.userData && n.userData.gameName) ? n.userData.gameName.toLowerCase() : '';
+                    // Fallback: also check geometry size (torso roughly 0.6x0.8x0.3)
+                    const isTorso = name.includes('body') || name.includes('torso') || name.includes('shirt') || name.includes('clothes') || (n.geometry && n.geometry.parameters && Math.abs(n.geometry.parameters.width - 0.6) < 0.05);
+                    if (isTorso) {
                         n.material = n.material.clone();
-                    }
-                    if (n.geometry && n.geometry.clone) {
-                        n.geometry = n.geometry.clone();
-                    }
-                    // Apply color override to shirt/torso
-                    if (colorOverride && n.material && !Array.isArray(n.material)) {
-                        const name = (n.userData && n.userData.gameName) ? n.userData.gameName.toLowerCase() : '';
-                        // Fallback: also check geometry size (torso roughly 0.6x0.8x0.3)
-                        const isTorso = name.includes('body') || name.includes('torso') || name.includes('shirt') || name.includes('clothes') || (n.geometry && n.geometry.parameters && Math.abs(n.geometry.parameters.width - 0.6) < 0.05);
-                        if (isTorso) {
-                            n.material = n.material.clone();
-                            n.material.color = new THREE.Color(colorOverride);
-                        }
+                        n.material.color = new THREE.Color(colorOverride);
                     }
                 }
-                // Prevent controls/extra refs on cloned object
-                if (n.userData) n.userData = { ...n.userData };
-                if (n.name === 'leftArmPivot') pivots.leftArm = n;
-                else if (n.name === 'rightArmPivot') pivots.rightArm = n;
-                else if (n.name === 'leftLegPivot') pivots.leftLeg = n;
-                else if (n.name === 'rightLegPivot') pivots.rightLeg = n;
-            });
-            clone.userData = { ...(clone.userData || {}), pivots };
-            return clone;
+            }
+            // Prevent controls/extra refs on cloned object
+            if (n.userData) n.userData = { ...n.userData };
+            if (n.name === 'leftArmPivot') pivots.leftArm = n;
+            else if (n.name === 'rightArmPivot') pivots.rightArm = n;
+            else if (n.name === 'leftLegPivot') pivots.leftLeg = n;
+            else if (n.name === 'rightLegPivot') pivots.rightLeg = n;
+        });
+        clone.userData = { ...(clone.userData || {}), pivots };
+        
+        // Add debug hitbox (invisible by default)
+        this.addDebugHitbox(clone);
+        
+        return clone;
         } catch (e) {
             console.warn('Failed to clone player avatar:', e);
             return null;
@@ -834,5 +839,33 @@ export class MultiplayerClient {
         } catch (e) {
             // Non-fatal visual feedback error
         }
+    }
+    
+    addDebugHitbox(mesh) {
+        // Add wireframe sphere matching server hitbox (radius 0.8)
+        const geometry = new THREE.SphereGeometry(0.8, 16, 12);
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0xff0000, 
+            wireframe: true,
+            transparent: true,
+            opacity: 0.5
+        });
+        const hitbox = new THREE.Mesh(geometry, material);
+        hitbox.name = 'debugHitbox';
+        hitbox.visible = false; // Hidden by default
+        mesh.add(hitbox);
+    }
+    
+    toggleHitboxes() {
+        this.showHitboxes = !this.showHitboxes;
+        console.log(`[DEBUG] Hitboxes ${this.showHitboxes ? 'ON' : 'OFF'}`);
+        
+        // Toggle visibility for all remote players
+        this.others.forEach(mesh => {
+            const hitbox = mesh.getObjectByName('debugHitbox');
+            if (hitbox) {
+                hitbox.visible = this.showHitboxes;
+            }
+        });
     }
 }

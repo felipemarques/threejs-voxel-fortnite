@@ -596,6 +596,12 @@ export class Player {
                 case 'Numpad4': this.switchWeapon(3); break;
                 case 'Numpad5': this.switchWeapon(4); break;
                 case 'Numpad6': this.switchWeapon(5); break;
+                case 'KeyH':
+                    // Toggle hitbox visualization (debug)
+                    if (this.multiplayerClient && typeof this.multiplayerClient.toggleHitboxes === 'function') {
+                        this.multiplayerClient.toggleHitboxes();
+                    }
+                    break;
                 case 'KeyB':
                     if (this.gameMode === 'studio') {
                         this.placeBlock();
