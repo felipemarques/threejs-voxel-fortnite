@@ -19,6 +19,8 @@ html {
 
 #game-container {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 0;
   left: 0;
   width: 100%;
@@ -28,6 +30,8 @@ html {
 
 #ui-layer {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 0;
   left: 0;
   width: 100%;
@@ -39,6 +43,8 @@ html {
 /* Crosshair */
 #crosshair {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 50%;
   left: 50%;
   width: 20px;
@@ -51,6 +57,8 @@ html {
 #crosshair::after {
   content: "";
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   background-color: rgba(255, 255, 255, 0.9);
   box-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
 }
@@ -76,6 +84,8 @@ html {
 /* Sniper Scope Overlay */
 #scope-overlay {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 0;
   left: 0;
   width: 100%;
@@ -95,6 +105,8 @@ html {
 #scope-overlay::before {
   content: "";
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 0;
   left: 0;
   width: 100%;
@@ -117,6 +129,8 @@ html {
 #scope-overlay::after {
   content: "";
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 50%;
   left: 50%;
   width: 120px;
@@ -131,6 +145,8 @@ html {
 /* Storm Timer */
 #storm-timer {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 20px;
   right: 20px;
   font-size: 24px;
@@ -145,6 +161,8 @@ html {
 /* Minimap */
 #minimap {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 80px;
   right: 20px;
   width: 180px;
@@ -180,6 +198,8 @@ html {
 /* Interaction Prompt */
 #interaction-prompt {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 60%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -198,6 +218,8 @@ html {
 /* Player Stats */
 #status-bars {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   bottom: 20px;
   left: 20px;
   display: flex;
@@ -259,6 +281,8 @@ html {
 /* Weapon Info */
 #weapon-info {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   bottom: 20px;
   right: 20px;
   text-align: right;
@@ -280,6 +304,8 @@ html {
 /* Hotbar */
 #hotbar {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
@@ -324,6 +350,8 @@ body.menu-open #hotbar {
 
 #selection-info {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 56%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -414,6 +442,8 @@ body.menu-open #hotbar {
 
 #vehicle-hud {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 330px !important; /* stacked right under the main dashboard */
   left: 10px;
   width: 275px !important;
@@ -457,6 +487,8 @@ body.menu-open #hotbar {
 
 #vehicle-fuel-fill {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 0;
   left: 0;
   bottom: 0;
@@ -470,6 +502,8 @@ body.menu-open #hotbar {
 
 #ui-layer .dashboardContainer {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 10px;
   left: 10px;
   width: 200px;
@@ -501,6 +535,8 @@ body.menu-open #hotbar {
 
 .palette-submenu .submenu {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   left: 0;
   top: 100%;
   margin-top: 6px;
@@ -545,6 +581,8 @@ body.menu-open #hotbar {
 /* Game Over Screen */
 #game-over-screen {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 0;
   left: 0;
   width: 100%;
@@ -588,6 +626,8 @@ body.menu-open #hotbar {
 /* Main Menu */
 #main-menu {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 0;
   left: 0;
   width: 100%;
@@ -884,6 +924,8 @@ body.menu-open #hotbar {
 /* Touch controls (mobile) */
 #touch-controls {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   bottom: 8px;
   left: 8px;
   right: 8px;
@@ -895,6 +937,8 @@ body.menu-open #hotbar {
 
 .tc-joystick {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   left: 20px;
   /* raise joystick to avoid overlapping HUD bottom bars */
   bottom: 110px;
@@ -920,6 +964,8 @@ body.menu-open #hotbar {
 
 .tc-joystick-right {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   right: 120px;
   /* Positioned to the left of buttons */
   bottom: 60px;
@@ -938,6 +984,8 @@ body.menu-open #hotbar {
 
 .tc-buttons {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   right: 20px;
   /* raise buttons to avoid overlapping weapon info */
   bottom: 110px;
@@ -952,6 +1000,8 @@ body.menu-open #hotbar {
 .tc-look-area {
   /* invisible right-side area used to capture swipe/drag to rotate camera */
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 0px !important;
   bottom: 0;
   width: 50% !important;
@@ -977,6 +1027,8 @@ body.menu-open #hotbar {
   font-size: 22px;
   user-select: none;
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
 }
 
 .tc-btn-fire {
@@ -1178,6 +1230,8 @@ body.menu-open #hotbar {
 }
 #ai-panel {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 10px;
   left: 220px;
   background: rgba(0, 0, 0, 0.75);
@@ -1263,6 +1317,8 @@ body.menu-open #hotbar {
 
 div#camera-hint {
   position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
   top: 85%;
   left: 50%;
   transform: translateX(-50%);
@@ -1290,6 +1346,8 @@ div#camera-hint {
 
 .topbar-menu-button {
     position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
     left: 15px;
     background: rgba(255,255,255,0.1);
     color: white;
@@ -1309,6 +1367,8 @@ div#camera-hint {
 
 .topbar-dropdown {
     position: absolute;
+    z-index: 1000;
+    pointer-events: auto;
     left: 15px;
     top: 55px;
     background: rgba(0,0,0,0.9);
