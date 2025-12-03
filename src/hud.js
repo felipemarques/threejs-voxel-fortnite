@@ -64,6 +64,21 @@ export class HUD {
         this.debugInfo = document.getElementById('debug-info');
         this.debugName = document.getElementById('debug-target-name');
         this.debugId = document.getElementById('debug-target-id');
+        this.debugClearBtn = document.getElementById('debug-clear-btn');
+        
+        this.debugEnabled = false; // Track if debug mode is enabled
+        
+        this.hoveredEnemy = null;
+        
+        // Performance optimization variables
+        this.lastRaycastTime = 0;
+        this.raycastInterval = 150; // ms - throttle raycasts to run every 150ms
+        this.cachedEnemyMeshes = [];
+        this.enemyMeshCacheTime = 0;
+        this.enemyMeshCacheDuration = 500; // ms - recache enemy meshes every 500ms
+        this.lastHoverInfoText = '';
+        this.lastWeaponName = '';
+        this.lastAmmoText = '';
 
         if (this.settings.debugMode) {
             this.debugInfo.style.display = 'block';
@@ -225,15 +240,24 @@ export class HUD {
             this.staminaText.innerText = `${Math.ceil(this.player.stamina)}`;
         }
 
-        // Weapon Info
+        // Weapon Info - only update DOM if changed
         const weapon = this.player.weapons[this.player.currentWeaponIndex];
-        this.weaponName.innerText = weapon.name;
+        if (this.lastWeaponName !== weapon.name) {
+            this.weaponName.innerText = weapon.name;
+            this.lastWeaponName = weapon.name;
+        }
         
-        // Ammo
+        // Ammo - only update DOM if changed
+        let newAmmoText;
         if (weapon.name === 'Fist') {
-            this.ammoCount.innerText = '∞';
+            newAmmoText = '∞';
         } else {
-            this.ammoCount.innerText = weapon.ammo === Infinity ? '∞' : `${weapon.currentMag} / ${weapon.ammo}`;
+            newAmmoText = weapon.ammo === Infinity ? '∞' : `${weapon.currentMag} / ${weapon.ammo}`;
+        }
+        
+        if (this.lastAmmoText !== newAmmoText) {
+            this.ammoCount.innerText = newAmmoText;
+            this.lastAmmoText = newAmmoText;
         }
 
         // Crosshair color: red if within weapon range, yellow if visible but out of range
@@ -256,8 +280,7 @@ export class HUD {
             }
         });
 
-        // Timer
-        const currentTime = performance.now();
+        // Timer - reuse currentTime from throttling above
         if (currentTime - this.lastTime > 1000) {
             this.timeRemaining--;
             if (this.timeRemaining < 0) this.timeRemaining = 0;
@@ -355,18 +378,28 @@ export class HUD {
         let hoveredDistNum = null;
         this.hoveredPlayer = null;
         
-        // If mouse-based hover didn't find an enemy, try a center-screen raycast
-        if (!this.hoveredEnemy && this.player && this.player.enemyManager && this.player.enemyManager.enemies.length > 0) {
-            const allEnemyMeshes = [];
-            this.player.enemyManager.enemies.forEach(enemy => {
-                enemy.mesh.traverse(child => {
-                    if (child.isMesh) allEnemyMeshes.push(child);
+        // Throttle raycasts for performance - only run every 150ms
+        const currentTime = performance.now();
+        const shouldRunRaycast = currentTime - this.lastRaycastTime >= this.raycastInterval;
+        
+        if (shouldRunRaycast && !this.hoveredEnemy && this.player && this.player.enemyManager && this.player.enemyManager.enemies.length > 0) {
+            this.lastRaycastTime = currentTime;
+            
+            // Cache enemy meshes to avoid expensive traverse() every frame
+            if (currentTime - this.enemyMeshCacheTime >= this.enemyMeshCacheDuration || this.cachedEnemyMeshes.length === 0) {
+                this.cachedEnemyMeshes = [];
+                this.player.enemyManager.enemies.forEach(enemy => {
+                    enemy.mesh.traverse(child => {
+                        if (child.isMesh) this.cachedEnemyMeshes.push(child);
+                    });
                 });
-            });
-            if (allEnemyMeshes.length > 0) {
+                this.enemyMeshCacheTime = currentTime;
+            }
+            
+            if (this.cachedEnemyMeshes.length > 0) {
                 // Raycast from center of screen
                 this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.player.camera);
-                const centerIntersects = this.raycaster.intersectObjects(allEnemyMeshes, true);
+                const centerIntersects = this.raycaster.intersectObjects(this.cachedEnemyMeshes, false);
                 if (centerIntersects.length > 0) {
                     const obj = centerIntersects[0].object;
                     let cur = obj;
@@ -409,15 +442,19 @@ export class HUD {
         }
         
         // Display hover info (enemy name/ID and distance)
+        // Only update DOM if text actually changed (performance optimization)
         if (this.hoverInfo) {
+            let newHoverText = '';
+            let shouldShow = false;
+            
             if (this.hoveredEnemy) {
                 const mesh = this.hoveredEnemy.mesh ? this.hoveredEnemy.mesh : (this.hoveredEnemy.isMesh ? this.hoveredEnemy : null) || this.hoveredEnemy;
                 const id = (mesh && mesh.userData && (mesh.userData.gameId || mesh.userData.gameid)) ? (mesh.userData.gameId || mesh.userData.gameid) : '---';
                 const enemyPos = (this.hoveredEnemy.position) ? this.hoveredEnemy.position : (mesh ? mesh.position : null);
                 hoveredDistNum = enemyPos ? this.player.position.distanceTo(enemyPos) : null;
                 const dist = hoveredDistNum ? hoveredDistNum.toFixed(2) : '---';
-                this.hoverInfo.innerText = `${id} • ${dist}m`;
-                this.hoverInfo.style.display = 'block';
+                newHoverText = `${id} • ${dist}m`;
+                shouldShow = true;
             } else if (this.hoveredPlayer) {
                 const nick = (this.hoveredPlayer.userData && this.hoveredPlayer.userData.nick) ? this.hoveredPlayer.userData.nick : 'Player';
                 let targetPos = null;
@@ -429,11 +466,21 @@ export class HUD {
                 }
                 hoveredDistNum = targetPos ? this.player.position.distanceTo(targetPos) : null;
                 const dist = hoveredDistNum ? hoveredDistNum.toFixed(2) : '---';
-                this.hoverInfo.innerText = `${nick} • ${dist}m`;
-                this.hoverInfo.style.display = 'block';
-            } else {
-                this.hoverInfo.innerText = '';
-                this.hoverInfo.style.display = 'none';
+                newHoverText = `${nick} • ${dist}m`;
+                shouldShow = true;
+            }
+            
+            // Only update DOM if value changed
+            if (this.lastHoverInfoText !== newHoverText) {
+                this.hoverInfo.innerText = newHoverText;
+                this.lastHoverInfoText = newHoverText;
+            }
+            
+            // Only update display style if needed
+            const currentDisplay = this.hoverInfo.style.display;
+            const targetDisplay = shouldShow ? 'block' : 'none';
+            if (currentDisplay !== targetDisplay) {
+                this.hoverInfo.style.display = targetDisplay;
             }
         }
 
