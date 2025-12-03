@@ -4,9 +4,8 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Base path for GitHub Pages
-  // Local dev = '/', Production = '/threejs-voxel-firecraft/'
-  base: process.env.NODE_ENV === 'production' ? '/threejs-voxel-firecraft/' : '/',
+  // Base path - gh-pages serves from repo root
+  base: '/',
   plugins: [react()],
   resolve: {
     alias: {

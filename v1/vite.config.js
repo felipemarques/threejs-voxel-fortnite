@@ -8,7 +8,7 @@ export default defineConfig({
   // Use the repo root as base so assets resolve correctly when `dist` is published
   // to the gh-pages branch root. This generates URLs like:
   // /threejs-voxel-fortnite/assets/index-<hash>.js
-  base: '/threejs-voxel-firecraft/dist/',
+  base: '/threejs-voxel-firecraft/v1/dist/',
   build: {
     rollupOptions: {
       input: {
