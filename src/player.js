@@ -682,6 +682,12 @@ export class Player {
                         this.canJump = false;
                     }
                     break;
+                case 'Escape':
+                    // Release pointer lock to allow menu access
+                    if (this.controls && this.controls.isLocked) {
+                        this.controls.unlock();
+                    }
+                    break;
                 case 'KeyN':
                     // Turbo toggle for vehicles
                     if (this.isInVehicle) {
