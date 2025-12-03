@@ -349,6 +349,107 @@ export class HUD {
         }
 
 
+        // --- HOVER DETECTION & CROSSHAIR COLOR (Always Active) ---
+        
+        // Hover info above crosshair - detect what we're aiming at
+        let hoveredDistNum = null;
+        this.hoveredPlayer = null;
+        
+        // If mouse-based hover didn't find an enemy, try a center-screen raycast
+        if (!this.hoveredEnemy && this.player && this.player.enemyManager && this.player.enemyManager.enemies.length > 0) {
+            const allEnemyMeshes = [];
+            this.player.enemyManager.enemies.forEach(enemy => {
+                enemy.mesh.traverse(child => {
+                    if (child.isMesh) allEnemyMeshes.push(child);
+                });
+            });
+            if (allEnemyMeshes.length > 0) {
+                // Raycast from center of screen
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.player.camera);
+                const centerIntersects = this.raycaster.intersectObjects(allEnemyMeshes, true);
+                if (centerIntersects.length > 0) {
+                    const obj = centerIntersects[0].object;
+                    let cur = obj;
+                    let found = null;
+                    while (cur) {
+                        found = this.player.enemyManager.enemies.find(en => cur.parent === en.mesh || cur === en.mesh || en.mesh.children.includes(cur));
+                        if (found) break;
+                        cur = cur.parent;
+                    }
+                    if (found) this.hoveredEnemy = found; else this.hoveredEnemy = null;
+                } else {
+                    this.hoveredEnemy = null;
+                }
+            }
+        }
+        
+        // If still nothing, try to find a remote player under the crosshair
+        if (!this.hoveredEnemy && this.multiplayer && this.multiplayer.others && this.multiplayer.others.size > 0) {
+            const remoteMeshes = [];
+            this.multiplayer.others.forEach(m => {
+                if (!m) return;
+                if (m.isMesh) {
+                    remoteMeshes.push(m);
+                } else if (m.traverse) {
+                    m.traverse(child => { if (child.isMesh) remoteMeshes.push(child); });
+                }
+            });
+            if (remoteMeshes.length > 0) {
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.player.camera);
+                const hits = this.raycaster.intersectObjects(remoteMeshes, true);
+                if (hits.length > 0) {
+                    let obj = hits[0].object;
+                    // walk up to find the root mesh that belongs to the remote player
+                    while (obj.parent && !obj.userData?.nick && !this.multiplayer.others.has(obj.userData?.gameId)) {
+                        obj = obj.parent;
+                    }
+                    this.hoveredPlayer = obj;
+                }
+            }
+        }
+        
+        // Display hover info (enemy name/ID and distance)
+        if (this.hoverInfo) {
+            if (this.hoveredEnemy) {
+                const mesh = this.hoveredEnemy.mesh ? this.hoveredEnemy.mesh : (this.hoveredEnemy.isMesh ? this.hoveredEnemy : null) || this.hoveredEnemy;
+                const id = (mesh && mesh.userData && (mesh.userData.gameId || mesh.userData.gameid)) ? (mesh.userData.gameId || mesh.userData.gameid) : '---';
+                const enemyPos = (this.hoveredEnemy.position) ? this.hoveredEnemy.position : (mesh ? mesh.position : null);
+                hoveredDistNum = enemyPos ? this.player.position.distanceTo(enemyPos) : null;
+                const dist = hoveredDistNum ? hoveredDistNum.toFixed(2) : '---';
+                this.hoverInfo.innerText = `${id} • ${dist}m`;
+                this.hoverInfo.style.display = 'block';
+            } else if (this.hoveredPlayer) {
+                const nick = (this.hoveredPlayer.userData && this.hoveredPlayer.userData.nick) ? this.hoveredPlayer.userData.nick : 'Player';
+                let targetPos = null;
+                if (this.hoveredPlayer.getWorldPosition) {
+                    targetPos = new THREE.Vector3();
+                    this.hoveredPlayer.getWorldPosition(targetPos);
+                } else {
+                    targetPos = this.hoveredPlayer.position || null;
+                }
+                hoveredDistNum = targetPos ? this.player.position.distanceTo(targetPos) : null;
+                const dist = hoveredDistNum ? hoveredDistNum.toFixed(2) : '---';
+                this.hoverInfo.innerText = `${nick} • ${dist}m`;
+                this.hoverInfo.style.display = 'block';
+            } else {
+                this.hoverInfo.innerText = '';
+                this.hoverInfo.style.display = 'none';
+            }
+        }
+
+        // Crosshair color: red if within weapon range, yellow if visible but out of range
+        if (crosshair) {
+            crosshair.classList.remove('target-red', 'target-yellow');
+            const weaponRange = weapon && weapon.range ? weapon.range : 1000;
+            if (this.hoveredEnemy && hoveredDistNum !== null) {
+                if (hoveredDistNum <= weaponRange) {
+                    crosshair.classList.add('target-red');
+                } else {
+                    crosshair.classList.add('target-yellow');
+                }
+            }
+        }
+
         // --- DEBUG / DASHBOARD UPDATES (Only if enabled) ---
         if (!this.debugEnabled) {
             return;
@@ -504,85 +605,6 @@ export class HUD {
             }
         }
 
-        // Hover info above crosshair
-        let hoveredDistNum = null;
-        this.hoveredPlayer = null;
-        // If mouse-based hover didn't find an enemy, try a center-screen raycast
-        if (!this.hoveredEnemy && this.player && this.player.enemyManager && this.player.enemyManager.enemies.length > 0) {
-            const allEnemyMeshes = [];
-            this.player.enemyManager.enemies.forEach(enemy => {
-                enemy.mesh.traverse(child => {
-                    if (child.isMesh) allEnemyMeshes.push(child);
-                });
-            });
-            if (allEnemyMeshes.length > 0) {
-                // Raycast from center of screen
-                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.player.camera);
-                const centerIntersects = this.raycaster.intersectObjects(allEnemyMeshes, true);
-                if (centerIntersects.length > 0) {
-                    const obj = centerIntersects[0].object;
-                    let cur = obj;
-                    let found = null;
-                    while (cur) {
-                        found = this.player.enemyManager.enemies.find(en => cur.parent === en.mesh || cur === en.mesh || en.mesh.children.includes(cur));
-                        if (found) break;
-                        cur = cur.parent;
-                    }
-                    if (found) this.hoveredEnemy = found; else this.hoveredEnemy = null;
-                } else {
-                    this.hoveredEnemy = null;
-                }
-            }
-        }
-        // If still nothing, try to find a remote player under the crosshair
-        if (!this.hoveredEnemy && this.multiplayer && this.multiplayer.others && this.multiplayer.others.size > 0) {
-            const remoteMeshes = [];
-            this.multiplayer.others.forEach(m => {
-                if (!m) return;
-                if (m.isMesh) {
-                    remoteMeshes.push(m);
-                } else if (m.traverse) {
-                    m.traverse(child => { if (child.isMesh) remoteMeshes.push(child); });
-                }
-            });
-            if (remoteMeshes.length > 0) {
-                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.player.camera);
-                const hits = this.raycaster.intersectObjects(remoteMeshes, true);
-                if (hits.length > 0) {
-                    let obj = hits[0].object;
-                    // walk up to find the root mesh that belongs to the remote player
-                    while (obj.parent && !obj.userData?.nick && !this.multiplayer.others.has(obj.userData?.gameId)) {
-                        obj = obj.parent;
-                    }
-                    this.hoveredPlayer = obj;
-                }
-            }
-        }
-        if (this.hoverInfo) {
-            if (this.hoveredEnemy) {
-                const mesh = this.hoveredEnemy.mesh ? this.hoveredEnemy.mesh : (this.hoveredEnemy.isMesh ? this.hoveredEnemy : null) || this.hoveredEnemy;
-                const id = (mesh && mesh.userData && (mesh.userData.gameId || mesh.userData.gameid)) ? (mesh.userData.gameId || mesh.userData.gameid) : '---';
-                const enemyPos = (this.hoveredEnemy.position) ? this.hoveredEnemy.position : (mesh ? mesh.position : null);
-                hoveredDistNum = enemyPos ? this.player.position.distanceTo(enemyPos) : null;
-                const dist = hoveredDistNum ? hoveredDistNum.toFixed(2) : '---';
-                this.hoverInfo.innerText = `${id} • ${dist}m`;
-            } else if (this.hoveredPlayer) {
-                const nick = (this.hoveredPlayer.userData && this.hoveredPlayer.userData.nick) ? this.hoveredPlayer.userData.nick : 'Player';
-                let targetPos = null;
-                if (this.hoveredPlayer.getWorldPosition) {
-                    targetPos = new THREE.Vector3();
-                    this.hoveredPlayer.getWorldPosition(targetPos);
-                } else {
-                    targetPos = this.hoveredPlayer.position || null;
-                }
-                hoveredDistNum = targetPos ? this.player.position.distanceTo(targetPos) : null;
-                const dist = hoveredDistNum ? hoveredDistNum.toFixed(2) : '---';
-                this.hoverInfo.innerText = `${nick} • ${dist}m`;
-            } else {
-                this.hoverInfo.innerText = '';
-            }
-        }
-
         // Sniper scope overlay
         if (this.scopeOverlay) {
             // weapon already declared at function scope (line 229)
@@ -591,21 +613,6 @@ export class HUD {
             // crosshair already declared at function scope (line 240)
             if (crosshair) {
                 crosshair.classList.toggle('hidden', sniperActive);
-            }
-        }
-
-        // Crosshair color: red if within weapon range, yellow if visible but out of range, always update every frame
-        // crosshair already declared at function scope (line 240)
-        if (crosshair) {
-            crosshair.classList.remove('target-red', 'target-yellow');
-            // weapon already declared at function scope (line 229)
-            const weaponRange = weapon && weapon.range ? weapon.range : 1000;
-            if (this.hoveredEnemy && hoveredDistNum !== null) {
-                if (hoveredDistNum <= weaponRange) {
-                    crosshair.classList.add('target-red');
-                } else {
-                    crosshair.classList.add('target-yellow');
-                }
             }
         }
 
