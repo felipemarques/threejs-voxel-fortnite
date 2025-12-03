@@ -1348,7 +1348,6 @@ div#camera-hint {
     position: absolute;
     z-index: 1000;
     pointer-events: auto;
-    left: 15px;
     background: rgba(255,255,255,0.1);
     color: white;
     border: 1px solid rgba(255,255,255,0.2);
@@ -1358,6 +1357,7 @@ div#camera-hint {
     font-size: 14px;
     transition: all 0.2s;
     font-family: Arial, sans-serif;
+    left: 15px;
 }
 
 .topbar-menu-button:hover {
