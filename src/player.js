@@ -892,14 +892,14 @@ export class Player {
                 
                 // Log parent hierarchy for debugging
                 const hierarchy = [];
-                let current = hitObject;
-                while (current && hierarchy.length < 5) {
+                let hierarchyCurrent = hitObject;
+                while (hierarchyCurrent && hierarchy.length < 5) {
                     hierarchy.push({
-                        name: current.name || 'unnamed',
-                        type: current.type,
-                        userData: current.userData ? Object.keys(current.userData).join(', ') : 'none'
+                        name: hierarchyCurrent.name || 'unnamed',
+                        type: hierarchyCurrent.type,
+                        userData: hierarchyCurrent.userData ? Object.keys(hierarchyCurrent.userData).join(', ') : 'none'
                     });
-                    current = current.parent;
+                    hierarchyCurrent = hierarchyCurrent.parent;
                 }
                 console.log('🌳 Hierarchy:');
                 console.table(hierarchy);
