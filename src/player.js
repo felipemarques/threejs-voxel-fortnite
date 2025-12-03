@@ -76,22 +76,37 @@ export class Player {
         ];
 
         
-        // Start loadout
-        if (this.gameMode === 'matrix-ai') {
-            // Bare hands only for Matrix AI Builder
-            this.weapons = [this.allWeapons[1]]; // Fist
-        } else {
-            // All weapons available (Pistol, Fist, Rifle, Sniper, SMG, Shotgun, DMR)
-            this.weapons = [
-                this.allWeapons[1],  // Fist (Slot 1)
-                this.allWeapons[0],  // Pistol (Slot 2)
-                this.allWeapons[2],  // Rifle
-                this.allWeapons[3],  // Sniper
-                this.allWeapons[4],  // SMG
-                this.allWeapons[5],  // Shotgun
-                this.allWeapons[6]   // DMR
-            ];
-        }
+    // Start loadout - Different weapons per game mode
+    if (this.gameMode === 'matrix-ai') {
+        // Matrix AI Builder: Bare hands only
+        this.weapons = [this.allWeapons[1]]; // Fist
+    } else if (this.gameMode === 'matrix') {
+        // Matrix: All weapons (testing mode)
+        this.weapons = [
+            this.allWeapons[1],  // Fist (Slot 1)
+            this.allWeapons[0],  // Pistol (Slot 2)
+            this.allWeapons[2],  // Rifle
+            this.allWeapons[3],  // Sniper
+            this.allWeapons[4],  // SMG
+            this.allWeapons[5],  // Shotgun
+            this.allWeapons[6]   // DMR
+        ];
+    } else if (this.gameMode === 'arena') {
+        // Arena: Fist + Pistol + 1 random weapon
+        const randomWeaponIndex = [2, 3, 4, 5, 6][Math.floor(Math.random() * 5)];
+        this.weapons = [
+            this.allWeapons[1],              // Fist (Slot 1)
+            this.allWeapons[0],              // Pistol (Slot 2)
+            this.allWeapons[randomWeaponIndex]  // Random: Rifle/Sniper/SMG/Shotgun/DMR
+        ];
+    } else {
+        // Arcade, Survival, Multiplayer: Fist + Pistol only
+        // Players must find other weapons in the map
+        this.weapons = [
+            this.allWeapons[1],  // Fist (Slot 1)
+            this.allWeapons[0]   // Pistol (Slot 2)
+        ];
+    }
 
         this.currentWeaponIndex = 0;
 
