@@ -8,6 +8,8 @@ import { ItemManager } from './items.js';
 import { TouchControls } from './touchControls.js';
 import { MultiplayerClient } from './multiplayerClient.js';
 
+window.DEBUG_STATIC_TEST = true; // Enable debug mode (disable movement)
+
 // Mobile/coarse-pointer detection used to avoid Pointer Lock on touch devices
 const IS_MOBILE = (() => {
     try {
@@ -32,6 +34,7 @@ window.addEventListener('unhandledrejection', (ev) => {
     // allow other rejections to surface
 });
 import { createDebugOverlay } from './debugOverlay.js';
+import Stats from 'three/addons/libs/stats.module.js';
 
 
 class Game {
@@ -46,6 +49,16 @@ class Game {
         this.matchSettings = null;
         this.lastPlaySettings = null;
         this.aiObjects = [];
+        
+        // FPS Monitor (Stats.js) - Hidden by default, shown when debug enabled
+        this.stats = new Stats();
+        this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb
+        this.stats.dom.style.position = 'absolute';
+        this.stats.dom.style.left = '5px';
+        this.stats.dom.style.top = '5px';
+        this.stats.dom.style.zIndex = '100';
+        this.stats.dom.style.display = 'none'; // Hidden by default
+        document.body.appendChild(this.stats.dom);
         this.aiMaxAiObjects = 200;
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -225,10 +238,80 @@ class Game {
         const btn = document.getElementById('debug-toggle-btn');
         if (!btn) return;
         btn.classList.toggle('hidden', !enabled);
+        
+        // NOTE: Stats.js (FPS) is controlled independently by Show FPS checkbox, not debug mode
+        
         if (!enabled && window.debugOverlay && typeof window.debugOverlay.hide === 'function') {
             try { window.debugOverlay.hide(); } catch (e) {}
             try { localStorage.removeItem('showDebugOverlay'); } catch (e) {}
         }
+    }
+    
+    makeDashboardDraggable(elementId) {
+        const dashboard = document.getElementById(elementId);
+        if (!dashboard) return;
+        
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        // Make cursor indicate draggable
+        dashboard.style.cursor = 'move';
+        
+        const dragStart = (e) => {
+            // Only drag if clicking on the dashboard itself, not child elements like inputs
+            if (e.target !== dashboard && !e.target.classList.contains('dashboard-header')) return;
+            
+            if (e.type === "touchstart") {
+                initialX = e.touches[0].clientX - xOffset;
+                initialY = e.touches[0].clientY - yOffset;
+            } else {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+            }
+            
+            isDragging = true;
+        };
+        
+        const dragEnd = (e) => {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+        };
+        
+        const drag = (e) => {
+            if (!isDragging) return;
+            
+            e.preventDefault();
+            
+            if (e.type === "touchmove") {
+                currentX = e.touches[0].clientX - initialX;
+                currentY = e.touches[0].clientY - initialY;
+            } else {
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+            }
+            
+            xOffset = currentX;
+            yOffset = currentY;
+            
+            setTranslate(currentX, currentY, dashboard);
+        };
+        
+        const setTranslate = (xPos, yPos, el) => {
+            el.style.transform = `translate(${xPos}px, ${yPos}px)`;
+        };
+        
+        dashboard.addEventListener("mousedown", dragStart);
+        dashboard.addEventListener("mouseup", dragEnd);
+        dashboard.addEventListener("mousemove", drag);
+        dashboard.addEventListener("touchstart", dragStart);
+        dashboard.addEventListener("touchend", dragEnd);
+        dashboard.addEventListener("touchmove", drag);
     }
 
     assignMultiplayerSpawn() {
@@ -249,7 +332,10 @@ class Game {
                 const z = (rand() * 2 - 1) * limit;
                 let y = 0;
                 if (this.world && typeof this.world.getHeightAt === 'function') {
-                    y = this.world.getHeightAt(x, z);
+                    // Skip terrain height in debug mode
+                    if (!window.DEBUG_STATIC_TEST) {
+                        y = this.world.getHeightAt(x, z);
+                    }
                 }
                 const farEnough = !this.multiplayer || this.multiplayer.others.size === 0 || Array.from(this.multiplayer.others.values()).every(o => {
                     if (!o || !o.position) return true;
@@ -355,6 +441,7 @@ class Game {
         const mapSizeVal = document.getElementById('map-size-val');
         const debugCheckbox = document.getElementById('setting-debug');
         const minimapCheckbox = document.getElementById('setting-minimap');
+        const showFpsCheckbox = document.getElementById('setting-show-fps');
         const volumeSlider = document.getElementById('setting-music-volume');
         const volumeVal = document.getElementById('setting-music-volume-val');
         const sfxVolumeSlider = document.getElementById('setting-sfx-volume');
@@ -380,6 +467,7 @@ class Game {
         const mpSeedInput = document.getElementById('setting-mp-seed');
         const mpRoomInput = document.getElementById('setting-mp-room');
         const mpRoomGenerate = document.getElementById('mp-room-generate');
+        const mpSpawnInput = document.getElementById('setting-mp-spawn');
         const mpNickInput = document.getElementById('setting-mp-nickname');
         const mpColorInput = document.getElementById('setting-mp-color');
         const mpZombiesCheckbox = document.getElementById('setting-mp-zombies');
@@ -442,10 +530,32 @@ class Game {
                     child.style.display = isCollapsed ? 'none' : '';
                 });
                 btn.innerText = isCollapsed ? '+' : '–';
+                
+                // Control HUD debug mode when dashboard toggle changes
+                if (targetId === 'dashboard' && this.hud && typeof this.hud.setDebugEnabled === 'function') {
+                    this.hud.setDebugEnabled(!isCollapsed);
+                }
             });
         };
         bindToggle(dashToggle, 'dashboard');
         bindToggle(perfToggle, 'perf-dashboard');
+        
+        // Debug panel clear button
+        const debugClearBtn = document.getElementById('debug-clear-btn');
+        if (debugClearBtn) {
+            debugClearBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const debugInfo = document.getElementById('debug-info');
+                if (debugInfo) {
+                    debugInfo.style.display = 'none';
+                    const targetName = document.getElementById('debug-target-name');
+                    const targetId = document.getElementById('debug-target-id');
+                    if (targetName) targetName.innerText = 'None';
+                    if (targetId) targetId.innerText = '---';
+                }
+            });
+        }
 
         // Load Settings
         const savedSettings = localStorage.getItem('voxel-firecraft-settings');
@@ -470,7 +580,8 @@ class Game {
                 const v = parseInt(s.musicVolume, 10);
                 volumeSlider.value = v;
                 volumeVal.innerText = v;
-                this.bgMusicVolume = v / 100;
+                // Use power curve for better volume perception (logarithmic-like)
+                this.bgMusicVolume = Math.pow(v / 100, 2);
             }
             if (sfxVolumeSlider && sfxVolumeVal && s.sfxVolume !== undefined) {
                 const sv = parseInt(s.sfxVolume, 10);
@@ -514,6 +625,14 @@ class Game {
             if (matrixAiHintsCheckbox) matrixAiHintsCheckbox.checked = s.matrixAiHints !== false;
             if (studioFlightCheckbox) studioFlightCheckbox.checked = s.studioFlight !== false;
             if (studioShowGridCheckbox) studioShowGridCheckbox.checked = s.studioShowGrid !== false;
+            
+            // Load Show FPS setting
+            if (showFpsCheckbox) {
+                showFpsCheckbox.checked = s.showFps === true;
+                if (this.stats) {
+                    this.stats.dom.style.display = showFpsCheckbox.checked ? 'block' : 'none';
+                }
+            }
         }
 
         // Update labels live
@@ -523,6 +642,23 @@ class Game {
         bindRangeLabel(arenaTimeInput, arenaTimeVal);
         bindRangeLabel(renderScaleInput, renderScaleVal);
         bindRangeLabel(sfxVolumeSlider, sfxVolumeVal);
+        
+        if (sfxVolumeSlider) {
+            sfxVolumeSlider.addEventListener('change', () => {
+                const vol = parseInt(sfxVolumeSlider.value, 10);
+                persistSetting('sfxVolume', vol);
+                const normalizedVol = vol / 100;
+                
+                if (this.player && typeof this.player.setSFXVolume === 'function') {
+                    this.player.setSFXVolume(normalizedVol);
+                }
+                
+                if (this.enemyManager && typeof this.enemyManager.setSFXVolume === 'function') {
+                    this.enemyManager.setSFXVolume(normalizedVol);
+                }
+            });
+        }
+
         if (autoPerfCheckbox) {
             autoPerfCheckbox.addEventListener('change', () => {
                 const settings = this.lastPlaySettings || {};
@@ -539,6 +675,29 @@ class Game {
                 persistSetting('performanceMode', perfModeCheckbox.checked);
             });
         }
+        
+        // Debug checkbox - control dashboard visibility and processing
+        if (debugCheckbox) {
+            debugCheckbox.addEventListener('change', () => {
+                const enabled = debugCheckbox.checked;
+                persistSetting('debugMode', enabled);
+                
+                // Control HUD dashboard visibility and processing
+                if (this.hud && typeof this.hud.setDebugEnabled === 'function') {
+                    this.hud.setDebugEnabled(enabled);
+                }
+            });
+            
+            // Set initial state from settings
+            const savedSettings = localStorage.getItem('voxel-firecraft-settings');
+            if (savedSettings) {
+                const s = JSON.parse(savedSettings);
+                if (this.hud && typeof this.hud.setDebugEnabled === 'function') {
+                    this.hud.setDebugEnabled(s.debugMode === true);
+                }
+            }
+        }
+        
         if (renderScaleInput) {
             renderScaleInput.addEventListener('change', () => {
                 const settings = this.lastPlaySettings || {};
@@ -555,6 +714,21 @@ class Game {
                 persistSetting('showHat', showHatCheckbox.checked);
             });
         }
+        
+        // Show FPS checkbox
+        if (showFpsCheckbox) {
+            showFpsCheckbox.addEventListener('change', () => {
+                const show = showFpsCheckbox.checked;
+                persistSetting('showFps', show);
+                if (this.stats) {
+                    this.stats.dom.style.display = show ? 'block' : 'none';
+                }
+            });
+        }
+        
+        // Make dashboards draggable
+        this.makeDashboardDraggable('dashboard');
+        this.makeDashboardDraggable('perf-dashboard');
 
         playBtn.onclick = () => {
             const selectedMode = this._selectedMode || 'arcade';
@@ -574,6 +748,7 @@ class Game {
                 showMinimap: minimapCheckbox ? minimapCheckbox.checked : true,
                 musicVolume: volumeSlider ? parseInt(volumeSlider.value) : Math.round(this.bgMusicVolume * 100),
                 musicEnabled: document.getElementById('setting-music-enabled') ? document.getElementById('setting-music-enabled').checked : true,
+                showFps: showFpsCheckbox ? showFpsCheckbox.checked : false,
                 cameraMode: cameraSelect.value,
                 mouthStyle: mouthStyleSelect ? mouthStyleSelect.value : 'serious',
                 showHat: showHatCheckbox ? showHatCheckbox.checked : true,
@@ -591,6 +766,7 @@ class Game {
                 mpServer: mpServerInput ? mpServerInput.value : '',
                 mpSeed: mpSeedInput ? mpSeedInput.value.trim() : '',
                 mpRoom: mpRoomInput ? mpRoomInput.value : '',
+                mpSpawn: mpSpawnInput ? mpSpawnInput.value : '',
                 mpNick: mpNickInput ? mpNickInput.value : '',
                 mpColor: mpColorInput ? mpColorInput.value : '#29b6f6',
                 mpZombies: mpZombiesCheckbox ? mpZombiesCheckbox.checked : true,
@@ -713,14 +889,15 @@ class Game {
 
         // Volume slider live update
         if (volumeSlider) {
-            volumeSlider.oninput = () => {
-                const v = parseInt(volumeSlider.value, 10);
-                if (volumeVal) volumeVal.innerText = v;
-                this.bgMusicVolume = v / 100;
-                if (this.bgAudio) {
-                    try { this.bgAudio.volume = this.bgMusicVolume; } catch(e) {}
+            volumeSlider.addEventListener('change', () => {
+                const vol = parseInt(volumeSlider.value, 10);
+                persistSetting('musicVolume', vol);
+                // Use power curve for better volume perception
+                this.bgMusicVolume = Math.pow(vol / 100, 2);
+                if (this.bgMusic) {
+                    this.bgMusic.volume = this.bgMusicVolume;
                 }
-            };
+            });
         }
         
         // Music enabled checkbox live update
@@ -944,7 +1121,19 @@ class Game {
         }
         // Multiplayer: randomize spawn away from others
         if (effectiveSettings.gameMode === 'multiplayer') {
-            this.assignMultiplayerSpawn();
+            // If custom spawn is provided and DEBUG_STATIC_TEST is active, spawn there directly
+            if (window.DEBUG_STATIC_TEST && settings.mpSpawn) {
+                const parts = settings.mpSpawn.split(',').map(s => parseFloat(s.trim()));
+                if (parts.length === 3 && parts.every(n => !isNaN(n))) {
+                    console.log('[MAIN] Setting initial spawn to custom position:', parts);
+                    this.player.mesh.position.set(parts[0], parts[1], parts[2]);
+                    this.player.debugSpawnY = parts[1]; // Store Y for locking
+                }
+            } else if (!window.DEBUG_STATIC_TEST) {
+                // Normal mode: randomize spawn
+                this.assignMultiplayerSpawn();
+            }
+            // In DEBUG_STATIC_TEST without custom spawn, leave at (0,0,0) - server will handle
         }
         // Multiplayer client setup
         if (effectiveSettings.gameMode === 'multiplayer') {
@@ -955,7 +1144,8 @@ class Game {
                 nick: settings.mpNick || 'Player',
                 color: settings.mpColor || '#29b6f6',
                 roomCode: settings.mpRoom || 'PUBLIC',
-                settings: this.matchSettings
+                settings: this.matchSettings,
+                customSpawn: settings.mpSpawn || null
             });
                 if (!settings.mpServer) {
                     alert('Multiplayer server URL not set. Please configure it in the Multiplayer tab.');
@@ -1020,11 +1210,13 @@ class Game {
 
         this.hud = new HUD(this.player, this.world, settings);
         if (this.player) this.player.hud = this.hud;
-        if (this.hud && typeof this.hud.setRenderer === 'function') {
-            this.hud.setRenderer(this.renderer);
-        }
-        if (this.hud && typeof this.hud.setMultiplayer === 'function') {
-            this.hud.setMultiplayer(this.multiplayer);
+        this.hud.setRenderer(this.renderer);
+        if (this.multiplayer) this.hud.setMultiplayer(this.multiplayer);
+        
+        // Set initial dashboard visibility based on debug mode setting
+        if (this.hud && typeof this.hud.setDebugEnabled === 'function') {
+            const debugEnabled = settings.debugMode === true;
+            this.hud.setDebugEnabled(debugEnabled);
         }
         this.enemyManager = new EnemyManager(this.scene, this.player, this.world, effectiveSettings);
         if (this.multiplayer && typeof this.multiplayer.setEnemyManager === 'function') {
@@ -1449,6 +1641,7 @@ Constraints: numbers are in meters, keep |x|,|z| <= 150, size in [0.2, 40]. No f
                         const btnLabel = this.player.isFloating ? 'FLOAT ON' : 'FLOAT OFF';
                         btn.innerText = btnLabel;
                         if (!this.player.isFloating) {
+                            // snap to ground when turning off
                             const y = this.player.getSurfaceHeight(this.player.position.x, this.player.position.z);
                             this.player.mesh.position.y = y;
                             this.player.velocity.y = 0;
@@ -2082,6 +2275,11 @@ Constraints: numbers are in meters, keep |x|,|z| <= 150, size in [0.2, 40]. No f
     }
 
     animate() {
+        if (!this._animationStarted) return;
+        
+        // Stats: begin frame measurement
+        this.stats.begin();
+        
         requestAnimationFrame(() => this.animate());
 
         try {
@@ -2242,7 +2440,11 @@ Constraints: numbers are in meters, keep |x|,|z| <= 150, size in [0.2, 40]. No f
             }
         }
 
+            // Render
             this.renderer.render(this.scene, this.camera);
+            
+            // Stats: end frame measurement
+            this.stats.end();
         } catch (err) {
                 try {
                     console.error('Unhandled error in Game.animate:', err, {
@@ -2401,7 +2603,13 @@ window.game = new Game();
 // Setup debug overlay: shows on-screen logs when enabled in settings or via localStorage/flag
 (function setupDebugOverlay(){
     try {
-                const saved = JSON.parse(localStorage.getItem('voxel-firecraft-settings') || '{}');
+        // Check if createDebugOverlay is available
+        if (typeof createDebugOverlay !== 'function') {
+            console.warn('createDebugOverlay is not available, skipping debug overlay setup');
+            return;
+        }
+        
+        const saved = JSON.parse(localStorage.getItem('voxel-firecraft-settings') || '{}');
         const want = (saved && saved.debugMode) || localStorage.getItem('showDebugOverlay') === 'true' || !!window.DEBUG_OVERLAY;
         // create overlay (it patches console); auto-show only when requested
         window.debugOverlay = createDebugOverlay({ autoShow: !!want });

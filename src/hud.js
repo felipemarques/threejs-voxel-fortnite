@@ -47,8 +47,10 @@ export class HUD {
         this.perfCpu = document.getElementById('perf-cpu');
         this.perfGpu = document.getElementById('perf-gpu');
         this.perfGpuMem = document.getElementById('perf-gpu-mem');
+        // References to DOM elements
         this.dashboardEl = document.getElementById('dashboard');
-        this.perfEl = document.getElementById('perf-dashboard');
+        this.perfDashboardEl = document.getElementById('perf-dashboard');
+        this.debugEnabled = false; // Track if debug mode is enabled
         this.netStatsText = document.getElementById('net-stats');
         this.netChart = document.getElementById('net-chart');
         this.netChartCtx = this.netChart ? this.netChart.getContext('2d') : null;
@@ -65,8 +67,10 @@ export class HUD {
 
         if (this.settings.debugMode) {
             this.debugInfo.style.display = 'block';
+            this.debugEnabled = true; // Enable debug mode
         } else {
             this.debugInfo.style.display = 'none';
+            this.debugEnabled = false; // Disable debug mode
         }
 
         // Storm Timer
@@ -123,6 +127,59 @@ export class HUD {
                     this.hoveredEnemy = null;
                 }
             }
+
+            
+            // Multiplayer Hover Check (mouse-based for desktop)
+            if (this.player && this.player.multiplayerClient && this.player.multiplayerClient.others.size > 0) {
+                const remoteMeshes = Array.from(this.player.multiplayerClient.others.values());
+                
+                // Try mouse position first (desktop)
+                this.raycaster.setFromCamera(this.mouse, this.player.camera);
+                let mpIntersects = this.raycaster.intersectObjects(remoteMeshes, true);
+                
+                // If nothing found with mouse, try center screen (crosshair - touch & desktop)
+                if (mpIntersects.length === 0) {
+                    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.player.camera);
+                    mpIntersects = this.raycaster.intersectObjects(remoteMeshes, true);
+                }
+                
+                if (mpIntersects.length > 0) {
+                    // Find which player was hit
+                    let obj = mpIntersects[0].object;
+                    let foundId = null;
+                    while (obj) {
+                        if (obj.userData && obj.userData.gameId) {
+                            foundId = obj.userData.gameId;
+                            break;
+                        }
+                        obj = obj.parent;
+                    }
+                    
+                    if (foundId) {
+                        // Get player info
+                        const playerMesh = this.player.multiplayerClient.others.get(foundId);
+                        const dist = this.player.mesh.position.distanceTo(mpIntersects[0].point);
+                        const targetPos = playerMesh ? playerMesh.position : mpIntersects[0].point;
+                        
+                        // Get nickname from multiplayerClient data
+                        let nick = `Player ${foundId.substring(0,4)}`;
+                        if (this.player.multiplayerClient.remoteData && this.player.multiplayerClient.remoteData[foundId]) {
+                            nick = this.player.multiplayerClient.remoteData[foundId].nick || nick;
+                        }
+                        
+                        this.hoverInfo.innerHTML = `${nick} (${dist.toFixed(1)}m)<br>Pos: (${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)})`;
+                        this.hoverInfo.style.display = 'block';
+                        this.hoveredPlayer = foundId;
+                    }
+                } else if (!this.hoveredEnemy) {
+                    // Only hide if not hovering enemy
+                    this.hoveredPlayer = null;
+                    if (!this.hoveredEnemy) {
+                        this.hoverInfo.style.display = 'none';
+                    }
+                }
+            }
+
         });
 
         // Bind touch/click handlers for hotbar slots so mobile can switch weapons
@@ -147,46 +204,157 @@ export class HUD {
         } catch (e) {}
     }
 
-    update() {
-        // Reset hoveredEnemy at the start of each frame to prevent sticky targeting
+    update(deltaTime) {
+        if (!this.player) return;
+
+        // --- CORE UI UPDATES (Always run) ---
+
+        // Health & Shield
+        const healthPercent = Math.max(0, Math.min(100, (this.player.health / this.player.maxHealth) * 100));
+        this.healthBar.style.width = `${healthPercent}%`;
+        this.healthText.innerText = `${Math.ceil(this.player.health)} / ${this.player.maxHealth}`;
+        
+        const shieldPercent = Math.max(0, Math.min(100, (this.player.shield / this.player.maxShield) * 100));
+        this.shieldBar.style.width = `${shieldPercent}%`;
+        this.shieldText.innerText = `${Math.ceil(this.player.shield)}`;
+
+        // Stamina
+        if (this.staminaBar && this.player.maxStamina) {
+            const staminaPercent = Math.max(0, Math.min(100, (this.player.stamina / this.player.maxStamina) * 100));
+            this.staminaBar.style.width = `${staminaPercent}%`;
+            this.staminaText.innerText = `${Math.ceil(this.player.stamina)}`;
+        }
+
+        // Weapon Info
+        const weapon = this.player.weapons[this.player.currentWeaponIndex];
+        this.weaponName.innerText = weapon.name;
+        
+        // Ammo
+        if (weapon.name === 'Fist') {
+            this.ammoCount.innerText = '∞';
+        } else {
+            this.ammoCount.innerText = weapon.ammo === Infinity ? '∞' : `${weapon.currentMag} / ${weapon.ammo}`;
+        }
+
+        // Crosshair color: red if within weapon range, yellow if visible but out of range
+        const crosshair = document.getElementById('crosshair');
+        if (crosshair) {
+            crosshair.classList.remove('target-red', 'target-yellow');
+            const weaponRange = weapon && weapon.range ? weapon.range : 1000;
+            // We need distance to hovered enemy for this
+            // Re-using the raycast logic below for hover, but we need it here.
+            // Let's do the hover check first? Or just do a quick check here?
+            // Actually, let's keep the hover logic here as it's part of core gameplay feedback
+        }
+
+        // Hotbar Active State
+        this.slots.forEach((slot, index) => {
+            if (index === this.player.currentWeaponIndex) {
+                slot.classList.add('active');
+            } else {
+                slot.classList.remove('active');
+            }
+        });
+
+        // Timer
+        const currentTime = performance.now();
+        if (currentTime - this.lastTime > 1000) {
+            this.timeRemaining--;
+            if (this.timeRemaining < 0) this.timeRemaining = 0;
+            
+            const minutes = Math.floor(this.timeRemaining / 60).toString().padStart(2, '0');
+            const seconds = (this.timeRemaining % 60).toString().padStart(2, '0');
+            this.timerValue.innerText = `${minutes}:${seconds}`;
+            
+            this.lastTime = currentTime;
+        }
+
+        // Game Over
+        if (this.player.isDead && this.player.gameMode !== 'matrix') {
+            this.showGameOver("YOU DIED");
+        }
+
+        // Minimap
+        this.updateMinimap();
+
+        // Hover Logic (Core Gameplay)
         this.hoveredEnemy = null;
-
-        // Outline overlay for hovered NPC: create/remove a separate highlight group so we don't modify original materials
-                if (this.player && this.player.enemyManager && this.player.enemyManager.enemies.length > 0) {
-                    // If hovered enemy changed, remove previous outline and create a new one
-                    if (this.currentOutlinedEnemy !== this.hoveredEnemy) {
-                        // Remove outline from previous
-                        if (this.currentOutlinedEnemy && this.currentOutlinedEnemy._outline) {
-                            try {
-                                this.currentOutlinedEnemy.mesh.remove(this.currentOutlinedEnemy._outline);
-                            } catch (e) {}
-                            this.currentOutlinedEnemy._outline = null;
-                        }
-
-                        // Create outline for new hovered enemy
-                        if (this.hoveredEnemy && this.hoveredEnemy.mesh) {
-                            const outlineGroup = new THREE.Group();
-                            // For each mesh child, create a simple scaled MeshBasicMaterial mesh
-                            this.hoveredEnemy.mesh.traverse(child => {
-                                if (child.isMesh) {
-                                    const outlineMesh = new THREE.Mesh(child.geometry, new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.BackSide }));
-                                    outlineMesh.position.copy(child.position);
-                                    outlineMesh.quaternion.copy(child.quaternion);
-                                    outlineMesh.scale.copy(child.scale).multiplyScalar(1.06);
-                                    outlineMesh.renderOrder = 999;
-                                    outlineMesh.material.depthTest = true;
-                                    outlineGroup.add(outlineMesh);
-                                }
-                            });
-                            // Attach outline to the enemy mesh so it follows animations/position
-                            this.hoveredEnemy.mesh.add(outlineGroup);
-                            this.hoveredEnemy._outline = outlineGroup;
-                        }
-
-                        this.currentOutlinedEnemy = this.hoveredEnemy;
-                    }
+        if (this.player && this.player.enemyManager && this.player.enemyManager.enemies.length > 0) {
+            // ... (Keep existing hover logic) ...
+            // For brevity in this replacement, I'll assume the raycast logic below is moved here or duplicated.
+            // Actually, let's just let the debug section handle the heavy raycasting if it's expensive?
+            // No, crosshair color depends on it.
+            // Let's copy the hover logic here.
+             // Collect all child meshes of all enemies
+             const allEnemyMeshes = [];
+             this.player.enemyManager.enemies.forEach(enemy => {
+                 enemy.mesh.traverse(child => {
+                     if (child.isMesh) allEnemyMeshes.push(child);
+                 });
+             });
+             this.raycaster.setFromCamera(this.mouse, this.player.camera);
+             const intersects = this.raycaster.intersectObjects(allEnemyMeshes, true);
+             let hoveredDistNum = null;
+             if (intersects.length > 0) {
+                 const obj = intersects[0].object;
+                 hoveredDistNum = intersects[0].distance;
+                 // Find enemy instance
+                 let cur = obj;
+                 let found = null;
+                 while (cur) {
+                     found = this.player.enemyManager.enemies.find(en => cur.parent === en.mesh || cur === en.mesh || en.mesh.children.includes(cur));
+                     if (found) break;
+                     cur = cur.parent;
+                 }
+                 this.hoveredEnemy = found || obj || null;
+             }
+             
+             // Update crosshair based on hover
+             if (crosshair && this.hoveredEnemy && hoveredDistNum !== null) {
+                if (hoveredDistNum <= (weapon.range || 1000)) {
+                    crosshair.classList.add('target-red');
+                } else {
+                    crosshair.classList.add('target-yellow');
                 }
-        // Dashboard
+            }
+        }
+
+        // Outline overlay (Visual feedback)
+        if (this.player && this.player.enemyManager) {
+            if (this.currentOutlinedEnemy !== this.hoveredEnemy) {
+                // Remove previous
+                if (this.currentOutlinedEnemy && this.currentOutlinedEnemy._outline) {
+                    try { this.currentOutlinedEnemy.mesh.remove(this.currentOutlinedEnemy._outline); } catch (e) {}
+                    this.currentOutlinedEnemy._outline = null;
+                }
+                // Add new
+                if (this.hoveredEnemy && this.hoveredEnemy.mesh) {
+                    const outlineGroup = new THREE.Group();
+                    this.hoveredEnemy.mesh.traverse(child => {
+                        if (child.isMesh) {
+                            const outlineMesh = new THREE.Mesh(child.geometry, new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.BackSide }));
+                            outlineMesh.position.copy(child.position);
+                            outlineMesh.quaternion.copy(child.quaternion);
+                            outlineMesh.scale.copy(child.scale).multiplyScalar(1.06);
+                            outlineMesh.renderOrder = 999;
+                            outlineMesh.material.depthTest = true;
+                            outlineGroup.add(outlineMesh);
+                        }
+                    });
+                    this.hoveredEnemy.mesh.add(outlineGroup);
+                    this.hoveredEnemy._outline = outlineGroup;
+                }
+                this.currentOutlinedEnemy = this.hoveredEnemy;
+            }
+        }
+
+
+        // --- DEBUG / DASHBOARD UPDATES (Only if enabled) ---
+        if (!this.debugEnabled) {
+            return;
+        }
+
+        // Dashboard Stats
         this.frames++;
         const now = performance.now();
         if (now - this.lastFpsTime >= 1000) {
@@ -206,7 +374,7 @@ export class HUD {
             this.enemyCount.innerText = this.player.enemyManager.enemies.length;
             this.killCount.innerText = this.player.enemyManager.killedCount || 0;
         }
-        // Drops (total items on map, ignoring opened/consumed)
+        // Drops
         if (this.dropCount) {
             const im = (typeof window !== 'undefined' && window.game && window.game.itemManager) ? window.game.itemManager : null;
             if (im && Array.isArray(im.items)) {
@@ -217,10 +385,10 @@ export class HUD {
             }
         }
 
-        // Distance traveled (convert meters to kilometers)
+        // Distance & Speed
         const distanceKm = (this.player.distanceTraveled / 1000).toFixed(2);
         if (this.distanceTraveled) this.distanceTraveled.innerText = distanceKm;
-        // Player speed (km/h). Use vehicle speed if driving; otherwise use velocity magnitude.
+        
         if (this.playerSpeed) {
             let speed = 0;
             if (this.player.isInVehicle && typeof this.player.currentSpeed === 'number') {
@@ -230,13 +398,13 @@ export class HUD {
             }
             this.playerSpeed.innerText = speed.toFixed(1);
         }
-        // Map size readout (static per match)
+        
         if (this.mapSizeText) {
             const size = (this.world && this.world.mapSize) ? this.world.mapSize : this.mapSize;
             this.mapSizeText.innerText = Math.round(size);
         }
 
-        // Performance dashboard
+        // Performance dashboard details
         if (this._renderer) {
             if (this.isPerfCollapsed()) {
                 return;
@@ -267,19 +435,40 @@ export class HUD {
 
         this.updateNetPanel();
 
-        // Stats
-        this.healthBar.style.width = `${this.player.health}%`;
-        this.healthText.innerText = Math.ceil(this.player.health);
-        
-        this.shieldBar.style.width = `${this.player.shield}%`;
-        this.shieldText.innerText = Math.ceil(this.player.shield);
-        
-        // Stamina
-        this.staminaBar.style.width = `${this.player.stamina}%`;
-        this.staminaText.innerText = Math.ceil(this.player.stamina);
+        // Update local player coordinates in dashboard
+        if (this.player) {
+            // Update Dashboard
+            document.getElementById('fps-counter').innerText = Math.round(1 / (window.game ? window.game.clock.getDelta() : 0.016)); // Approx
+            document.getElementById('player-speed').innerText = (this.player.currentSpeed * 3.6).toFixed(1);
+            document.getElementById('distance-traveled').innerText = (this.player.distanceTraveled / 1000).toFixed(2);
+            
+            // Local Coords
+            const pPos = this.player.mesh.position;
+            const coordText = `Pos: (${pPos.x.toFixed(1)}, ${pPos.y.toFixed(1)}, ${pPos.z.toFixed(1)})`;
+            let coordEl = document.getElementById('player-coords');
+            if (!coordEl) {
+                // Create if missing
+                coordEl = document.createElement('div');
+                coordEl.id = 'player-coords';
+                document.getElementById('dashboard').appendChild(coordEl);
+            }
+            coordEl.innerText = coordText;
 
-        // Weapon
-        const weapon = this.player.weapons[this.player.currentWeaponIndex];
+            // Resolution
+            let resEl = document.getElementById('screen-res');
+            if (!resEl) {
+                resEl = document.createElement('div');
+                resEl.id = 'screen-res';
+                document.getElementById('dashboard').appendChild(resEl);
+            }
+            resEl.innerText = `Res: ${window.innerWidth}x${window.innerHeight}`;
+
+            // Health & Shield
+            const hpPct = Math.max(0, Math.min(100, this.player.health));
+        }
+
+        // Weapon (reuse variable from line 229)
+        // weapon already declared above
         this.weaponName.innerText = weapon.name;
         
         if (this.player.isReloading) {
@@ -396,20 +585,20 @@ export class HUD {
 
         // Sniper scope overlay
         if (this.scopeOverlay) {
-            const weapon = this.player.weapons && this.player.weapons[this.player.currentWeaponIndex];
+            // weapon already declared at function scope (line 229)
             const sniperActive = this.player.isAiming && weapon && weapon.name === 'Sniper';
             this.scopeOverlay.classList.toggle('hidden', !sniperActive);
-            const crosshair = document.getElementById('crosshair');
+            // crosshair already declared at function scope (line 240)
             if (crosshair) {
                 crosshair.classList.toggle('hidden', sniperActive);
             }
         }
 
         // Crosshair color: red if within weapon range, yellow if visible but out of range, always update every frame
-        const crosshair = document.getElementById('crosshair');
+        // crosshair already declared at function scope (line 240)
         if (crosshair) {
             crosshair.classList.remove('target-red', 'target-yellow');
-            const weapon = this.player.weapons && this.player.weapons[this.player.currentWeaponIndex];
+            // weapon already declared at function scope (line 229)
             const weaponRange = weapon && weapon.range ? weapon.range : 1000;
             if (this.hoveredEnemy && hoveredDistNum !== null) {
                 if (hoveredDistNum <= weaponRange) {
@@ -446,19 +635,6 @@ export class HUD {
                 slot.classList.remove('active');
             }
         });
-
-        // Timer
-        const currentTime = performance.now();
-        if (currentTime - this.lastTime > 1000) {
-            this.timeRemaining--;
-            if (this.timeRemaining < 0) this.timeRemaining = 0;
-            
-            const minutes = Math.floor(this.timeRemaining / 60).toString().padStart(2, '0');
-            const seconds = (this.timeRemaining % 60).toString().padStart(2, '0');
-            this.timerValue.innerText = `${minutes}:${seconds}`;
-            
-            this.lastTime = currentTime;
-        }
 
         // Game Over
         if (this.player.isDead && this.player.gameMode !== 'matrix') {
@@ -881,5 +1057,23 @@ export class HUD {
 
     isPerfCollapsed() {
         return this.perfEl && this.perfEl.classList.contains('collapsed');
+    }
+    
+    setDebugEnabled(enabled) {
+        this.debugEnabled = enabled;
+        
+        // Hide/show dashboard container
+        const dashContainer = document.querySelector('.dashboardContainer');
+        if (dashContainer) {
+            dashContainer.style.display = enabled ? 'flex' : 'none';
+        }
+        
+        // Also control individual dashboards
+        if (this.dashboardEl) {
+            this.dashboardEl.style.display = enabled ? 'block' : 'none';
+        }
+        if (this.perfDashboardEl) {
+            this.perfDashboardEl.style.display = enabled ? 'block' : 'none';
+        }
     }
 }
