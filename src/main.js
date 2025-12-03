@@ -2250,6 +2250,86 @@ Constraints: numbers are in meters, keep |x|,|z| <= 150, size in [0.2, 40]. No f
         }
     }
 
+    setupTopBar(settings) {
+        const topbar = document.getElementById('game-topbar');
+        if (!topbar) return;
+
+        // Show top bar
+        topbar.style.display = 'flex';
+
+        // Set game mode display
+        const gamemodeDisplay = document.getElementById('topbar-gamemode');
+        if (gamemodeDisplay) {
+            const modeNames = {
+                'arcade': 'ARCADE',
+                'survival': 'SURVIVAL',
+                'arena': 'ARENA',
+                'matrix': 'MATRIX',
+                'matrix-ai': 'MATRIX AI',
+                'multiplayer': 'MULTIPLAYER'
+            };
+            gamemodeDisplay.innerText = `MODE: ${modeNames[settings.gameMode] || 'UNKNOWN'}`;
+        }
+
+        // Setup menu toggle
+        const menuBtn = document.getElementById('topbar-menu-btn');
+        const dropdown = document.getElementById('topbar-dropdown');
+        
+        if (menuBtn && dropdown) {
+            // Remove previous listeners to avoid duplicates
+            const newMenuBtn = menuBtn.cloneNode(true);
+            menuBtn.parentNode.replaceChild(newMenuBtn, menuBtn);
+            
+            newMenuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.classList.toggle('hidden');
+            });
+            
+            // Close dropdown on outside click
+            const closeDropdown = () => {
+                dropdown.classList.add('hidden');
+            };
+            document.addEventListener('click', closeDropdown);
+        }
+
+        // Setup quit button
+        const quitBtn = document.getElementById('topbar-quit');
+        if (quitBtn) {
+            const newQuitBtn = quitBtn.cloneNode(true);
+            quitBtn.parentNode.replaceChild(newQuitBtn, quitBtn);
+            
+            newQuitBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to quit this game?')) {
+                    // Hide top bar
+                    if (topbar) topbar.style.display = 'none';
+                    // Reload page to return to main menu
+                    location.reload();
+                }
+            });
+        }
+
+        // Setup info button
+        const infoBtn = document.getElementById('topbar-info');
+        if (infoBtn) {
+            const newInfoBtn = infoBtn.cloneNode(true);
+            infoBtn.parentNode.replaceChild(newInfoBtn, infoBtn);
+            
+            newInfoBtn.addEventListener('click', () => {
+                const mapSize = settings.mapSize || 'Unknown';
+                const enemyCount = settings.enemyCount || 0;
+                const stormEnabled = settings.stormEnabled ? 'Yes' : 'No';
+                const playersOnline = this.multiplayer && this.multiplayer.others ? this.multiplayer.others.size + 1 : 1;
+                
+                alert(`🎮 Game Information\n\n` +
+                      `Mode: ${settings.gameMode}\n` +
+                      `Map Size: ${mapSize}m\n` +
+                      `Enemies: ${enemyCount}\n` +
+                      `Storm: ${stormEnabled}\n` +
+                      `Players: ${playersOnline}`);
+            });
+        }
+    }
+
     // Background music control
     playBackgroundMusic() {
         try {
