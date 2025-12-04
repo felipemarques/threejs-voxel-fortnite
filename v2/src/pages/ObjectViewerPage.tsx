@@ -41,6 +41,9 @@ export function ObjectViewerPage() {
   const [hairColor, setHairColor] = useState('#8b4513') // Brown
   const [hairStyle, setHairStyle] = useState<HairStyle>('long')
   const [showEarrings, setShowEarrings] = useState(true)
+  
+  // Global visualization options
+  const [showBoundingBox, setShowBoundingBox] = useState(false)
 
   // Refs for Three.js objects
   const sceneRef = useRef<THREE.Scene | null>(null)
@@ -49,6 +52,7 @@ export function ObjectViewerPage() {
   const playerDataRef = useRef<any | null>(null)
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null)
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null)
+  const boundingBoxHelperRef = useRef<THREE.BoxHelper | null>(null)
   
   // Refs for values read in animation loop
   const animSpeedRef = useRef(animSpeed)
@@ -262,6 +266,25 @@ export function ObjectViewerPage() {
   useEffect(() => {
     loadPlayer(false)
   }, [characterType])
+  
+  // Bounding box visualization
+  useEffect(() => {
+    if (!sceneRef.current || !playerDataRef.current) return
+    
+    // Remove existing bounding box
+    if (boundingBoxHelperRef.current) {
+      sceneRef.current.remove(boundingBoxHelperRef.current)
+      boundingBoxHelperRef.current.dispose()
+      boundingBoxHelperRef.current = null
+    }
+    
+    // Add bounding box if enabled
+    if (showBoundingBox && playerDataRef.current.mesh) {
+      const boxHelper = new THREE.BoxHelper(playerDataRef.current.mesh, 0x00ff00)
+      sceneRef.current.add(boxHelper)
+      boundingBoxHelperRef.current = boxHelper
+    }
+  }, [showBoundingBox, playerDataRef.current])
 
   // Animation function - v1 exact
   function animateCharacter(playerData: any, anim: AnimationType, time: number, wrapper: any) {
@@ -510,6 +533,20 @@ export function ObjectViewerPage() {
               <button onClick={() => setIsNight(!isNight)} className="bg-[#444] border-none text-white  px-3 py-[6px] rounded cursor-pointer text-[13.6px] transition-colors hover:bg-[#555] w-full">
                 Day/Night
               </button>
+            </div>
+            
+            {/* Visualization Options */}
+            <div>
+              <label className="block mb-2 text-[13.6px] text-[#aaa]">Visualization</label>
+              <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white w-full">
+                <Checkbox 
+                  id="boundingBox" 
+                  checked={showBoundingBox} 
+                  onCheckedChange={(c: boolean) => setShowBoundingBox(c)} 
+                  className="mr-2" 
+                /> 
+                Show Bounding Box
+              </label>
             </div>
           </div>
         </div>
