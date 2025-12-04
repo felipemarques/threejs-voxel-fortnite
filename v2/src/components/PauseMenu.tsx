@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { SettingsDialog } from './menu/SettingsDialog'
 
@@ -10,8 +11,8 @@ interface PauseMenuProps {
 }
 
 export function PauseMenu({ 
-  onResume, 
-  onQuit, 
+  onResume,
+  onQuit,
   settingsOpen, 
   onSettingsOpenChange 
 }: PauseMenuProps) {

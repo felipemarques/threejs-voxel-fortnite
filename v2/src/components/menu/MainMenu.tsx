@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useGameSettings, type GameMode } from '@/stores/gameSettings'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -10,6 +11,7 @@ const gameModes: Array<{
   emoji: string
   description: string
   color: string
+  route: string
 }> = [
   {
     id: 'arcade',
@@ -17,6 +19,7 @@ const gameModes: Array<{
     emoji: '🎯',
     description: 'Modo clássico com tempestade, drops e progressão',
     color: 'from-orange-500 to-red-500',
+    route: '/arcade',
   },
   {
     id: 'survival',
@@ -24,6 +27,7 @@ const gameModes: Array<{
     emoji: '⚔️',
     description: 'Sobreviva sem tempestade, hardcore mode',
     color: 'from-green-500 to-emerald-500',
+    route: '/survival',
   },
   {
     id: 'arena',
@@ -31,6 +35,7 @@ const gameModes: Array<{
     emoji: '⚡',
     description: 'Partidas rápidas, ação intensa',
     color: 'from-red-500 to-pink-500',
+    route: '/arena',
   },
   {
     id: 'matrix',
@@ -38,6 +43,7 @@ const gameModes: Array<{
     emoji: '🧪',
     description: 'Sandbox sem inimigos para testes',
     color: 'from-blue-500 to-cyan-500',
+    route: '/matrix',
   },
   {
     id: 'multiplayer',
@@ -45,6 +51,7 @@ const gameModes: Array<{
     emoji: '🌐',
     description: 'Jogue online com amigos',
     color: 'from-purple-500 to-pink-500',
+    route: '/multiplayer',
   },
   {
     id: 'studio',
@@ -52,6 +59,7 @@ const gameModes: Array<{
     emoji: '🏗️',
     description: 'Modo criativo com construção',
     color: 'from-yellow-500 to-orange-500',
+    route: '/studio',
   },
   {
     id: 'matrix-ai',
@@ -59,10 +67,12 @@ const gameModes: Array<{
     emoji: '🤖',
     description: 'Builder com IA',
     color: 'from-indigo-500 to-blue-500',
+    route: '/matrix-ai',
   },
 ]
 
-export function MainMenu({ onStartGame }: { onStartGame: () => void }) {
+export function MainMenu() {
+  const navigate = useNavigate()
   const { gameMode, updateSetting } = useGameSettings()
   const [selectedMode, setSelectedMode] = useState<GameMode>(gameMode)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -74,7 +84,10 @@ export function MainMenu({ onStartGame }: { onStartGame: () => void }) {
 
   const handleStartGame = () => {
     updateSetting('gameMode', selectedMode)
-    onStartGame()
+    const modeData = gameModes.find(m => m.id === selectedMode)
+    if (modeData) {
+      navigate(modeData.route)
+    }
   }
 
   return (
@@ -131,7 +144,7 @@ export function MainMenu({ onStartGame }: { onStartGame: () => void }) {
 
       {/* Footer */}
       <p className="text-slate-500 mt-12 text-sm">
-        Press ESC anytime to return to menu
+        Press ESC during game to pause
       </p>
 
       {/* Settings Dialog */}
