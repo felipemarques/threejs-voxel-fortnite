@@ -130,8 +130,9 @@ export function ObjectViewerPage() {
     function animate() {
       requestAnimationFrame(animate)
       
-      const dt = 0.016 * animSpeedRef.current
-      animTimeRef.current += dt
+      // Match v1 calculation: dt * animSpeed, then * 10 in animation function
+      const dt = 0.016
+      animTimeRef.current += dt * animSpeedRef.current * 10
 
       // Apply animation
       if (playerDataRef.current) {
@@ -186,7 +187,8 @@ export function ObjectViewerPage() {
 
   // Animation function (based on v1)
   function animateCharacter(playerData: any, anim: AnimationType, time: number) {
-    const t = time * 10
+    // time already includes the * 10 multiplier from the loop
+    const t = time
 
     if (anim === 'idle') {
       if (playerData.leftArmPivot) playerData.leftArmPivot.rotation.x = Math.sin(t) * 0.1
