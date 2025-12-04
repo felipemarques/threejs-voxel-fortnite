@@ -33,7 +33,7 @@ function App() {
   return (
     <div className="relative w-full h-full bg-black">
       {/* Three.js Canvas */}
-      <GameCanvas color="#ff6600" />
+      <GameCanvas color="#ff6600" paused={gamePaused} />
       
       {/* Game UI Overlay */}
       {!gamePaused && (

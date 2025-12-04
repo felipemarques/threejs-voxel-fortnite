@@ -5,14 +5,18 @@ import { Mesh } from 'three'
 
 interface RotatingCubeProps {
   color: string
+  paused: boolean
 }
 
-function RotatingCube({ color }: RotatingCubeProps) {
+function RotatingCube({ color, paused }: RotatingCubeProps) {
   const meshRef = useRef<Mesh>(null!)
   
   useFrame((_state, delta) => {
-    meshRef.current.rotation.x += delta
-    meshRef.current.rotation.y += delta * 0.5
+    // Only animate if not paused
+    if (!paused) {
+      meshRef.current.rotation.x += delta
+      meshRef.current.rotation.y += delta * 0.5
+    }
   })
 
   return (
@@ -23,13 +27,13 @@ function RotatingCube({ color }: RotatingCubeProps) {
   )
 }
 
-export function GameCanvas({ color }: { color: string }) {
+export function GameCanvas({ color, paused = false }: { color: string; paused?: boolean }) {
   return (
     <Canvas camera={{ position: [0, 2, 5], fov: 50 }}>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} />
-      <RotatingCube color={color} />
-      <OrbitControls />
+      <RotatingCube color={color} paused={paused} />
+      <OrbitControls enableRotate={!paused} />
       <gridHelper args={[10, 10]} />
     </Canvas>
   )
