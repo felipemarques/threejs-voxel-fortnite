@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { MainMenu } from './components/menu/MainMenu'
 import { GameCanvas } from './components/GameCanvas'
@@ -68,7 +68,7 @@ function GamePage() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<MainMenu />} />
         <Route path="/arcade" element={<GamePage />} />
@@ -79,7 +79,7 @@ function App() {
         <Route path="/studio" element={<GamePage />} />
         <Route path="/matrix-ai" element={<GamePage />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
 
