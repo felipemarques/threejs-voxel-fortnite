@@ -165,11 +165,15 @@ export function ObjectViewerPage() {
     // Load male character
     loadPlayer(true)
 
+    // Animation clock - EXACTLY like v1
+    const clock = new THREE.Clock()
+
     // Animation loop
     function animate() {
       requestAnimationFrame(animate)
       
-      const dt = 0.016
+      // Use THREE.Clock.getDelta() like v1 - gets REAL time between frames
+      const dt = clock.getDelta()
       animTimeRef.current += dt * animSpeedRef.current * 10
 
       // Apply animation
