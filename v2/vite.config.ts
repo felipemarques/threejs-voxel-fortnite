@@ -3,8 +3,9 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: '/threejs-voxel-firecraft/v2/dist/',
+export default defineConfig(({ mode }) => ({
+  // Use '/' for development, '/threejs-voxel-firecraft/v2/dist/' for production
+  base: mode === 'development' ? '/' : '/threejs-voxel-firecraft/v2/dist/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -16,4 +17,4 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
   },
-})
+}))
