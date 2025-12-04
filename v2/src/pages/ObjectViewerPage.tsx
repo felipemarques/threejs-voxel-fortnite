@@ -12,6 +12,17 @@ export function ObjectViewerPage() {
   const [loading, setLoading] = useState(true)
   const [selectedObject, setSelectedObject] = useState('Male Character')
 
+  // ESC key handler to go back to menu
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        navigate('/')
+      }
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [navigate])
+
   useEffect(() => {
     if (!canvasRef.current) return
 
