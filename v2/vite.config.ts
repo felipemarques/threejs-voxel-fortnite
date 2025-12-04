@@ -4,7 +4,6 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Base path - gh-pages serves from repo root
   base: '/threejs-voxel-firecraft/v2/dist/',
   plugins: [react()],
   resolve: {
