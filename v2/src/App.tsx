@@ -6,6 +6,9 @@ import { PauseMenu } from './components/PauseMenu'
 import { ObjectViewerPage } from './pages/ObjectViewerPage'
 import { LoadingScreen } from './components/ui/LoadingScreen'
 import { useGameSettings } from './stores/gameSettings'
+import { useDebugStore } from './stores/debugStore'
+import { FPSCounter } from './components/debug/FPSCounter'
+import { DebugPanel } from './components/debug/DebugPanel'
 
 // Lobby imports
 import { ArcadeLobby } from './pages/lobbies/ArcadeLobby'
@@ -23,6 +26,7 @@ function GamePage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const { updateSetting } = useGameSettings()
+  const debug = useDebugStore()
   
   // Extract mode from URL
   const mode = location.pathname.substring(1) // Remove leading /
@@ -99,6 +103,10 @@ function GamePage() {
           onSettingsOpenChange={setSettingsOpen}
         />
       )}
+
+      {/* Debug Tools */}
+      {debug.showFPS && <FPSCounter />}
+      <DebugPanel />
     </div>
   )
 }
