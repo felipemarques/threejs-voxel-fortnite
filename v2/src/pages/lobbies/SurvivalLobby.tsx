@@ -1,108 +1,62 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { GameLobby, GameConfig } from '@/components/lobby/GameLobby'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Slider } from '@/components/ui/slider'
-import { Checkbox } from '@/components/ui/checkbox'
+import { GameLobby } from '@/components/lobby/GameLobby'
+import { useLobbyNavigation } from '@/hooks/useLobbyNavigation'
+import { DifficultySelector } from '@/components/lobby/DifficultySelector'
+import { SliderControl } from '@/components/lobby/SliderControl'
+import { CheckboxControl } from '@/components/lobby/CheckboxControl'
 
 export function SurvivalLobby() {
-  const navigate = useNavigate()
   const [dayLength, setDayLength] = useState(10)
   const [resources, setResources] = useState<'low' | 'medium' | 'high'>('medium')
   const [spawnRate, setSpawnRate] = useState(50)
   const [buildingEnabled, setBuildingEnabled] = useState(true)
-
-  const handleStartGame = (baseConfig: GameConfig) => {
-    const config: GameConfig = {
-      ...baseConfig,
-      survivalDayLength: dayLength,
-      survivalResources: resources,
-      survivalSpawnRate: spawnRate,
-      survivalBuilding: buildingEnabled,
-    }
-
-    navigate('/survival', { state: { config, fromLobby: true } })
-  }
-
-  const handleBack = () => {
-    navigate('/')
-  }
+  
+  const { handleStartGame, handleBack } = useLobbyNavigation('survival')
 
   return (
     <GameLobby
       mode="Survival"
       title="Survival Mode"
-      description="Survive the night, gather resources, and build your defenses!"
-      onStartGame={handleStartGame}
+      description="Survive the night with limited resources and building"
+      onStartGame={() => handleStartGame({
+        survivalDayLength: dayLength,
+        survivalResources: resources,
+        survivalSpawnRate: spawnRate,
+        survivalBuilding: buildingEnabled,
+      })}
       onBack={handleBack}
     >
-      {/* Day/Night Cycle Length */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium text-gray-300">Day/Night Cycle</Label>
-          <span className="text-sm font-bold text-[#00cec9]">{dayLength} min</span>
-        </div>
-        <Slider
-          value={[dayLength]}
-          onValueChange={([value]) => setDayLength(value)}
+      <div className="space-y-6">
+        <SliderControl
+          label="Day/Night Cycle Length"
+          value={dayLength}
+          onChange={setDayLength}
           min={1}
           max={60}
-          step={1}
-          className="w-full"
+          unit=" min"
         />
-      </div>
 
-      {/* Resource Density */}
-      <div className="space-y-3">
-        <Label className="text-sm font-medium text-gray-300">Resource Density</Label>
-        <div className="flex gap-2">
-          {(['low', 'medium', 'high'] as const).map((res) => (
-            <Button
-              key={res}
-              onClick={() => setResources(res)}
-              variant={resources === res ? 'default' : 'outline'}
-              className={
-                resources === res
-                  ? 'bg-[#00cec9] text-black hover:bg-[#00b4b4]'
-                  : 'border-white/20 bg-white/5 text-white hover:bg-white/10'
-              }
-            >
-              {res.charAt(0).toUpperCase() + res.slice(1)}
-            </Button>
-          ))}
-        </div>
-      </div>
+        <DifficultySelector
+          label="Resource Density"
+          value={resources}
+          onChange={setResources}
+          options={['low', 'medium', 'high'] as const}
+        />
 
-      {/* Enemy Spawn Rate */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium text-gray-300">Enemy Spawn Rate</Label>
-          <span className="text-sm font-bold text-[#00cec9]">{spawnRate}%</span>
-        </div>
-        <Slider
-          value={[spawnRate]}
-          onValueChange={([value]) => setSpawnRate(value)}
+        <SliderControl
+          label="Enemy Spawn Rate"
+          value={spawnRate}
+          onChange={setSpawnRate}
           min={0}
           max={100}
-          step={5}
-          className="w-full"
+          unit="%"
         />
-      </div>
 
-      {/* Building Toggle */}
-      <div className="flex items-center space-x-3">
-        <Checkbox
-          id="building"
+        <CheckboxControl
+          label="Enable Building System"
           checked={buildingEnabled}
-          onCheckedChange={(checked) => setBuildingEnabled(checked as boolean)}
+          onChange={setBuildingEnabled}
         />
-        <Label
-          htmlFor="building"
-          className="cursor-pointer text-sm font-medium text-gray-300"
-        >
-          Enable Building System
-        </Label>
       </div>
     </GameLobby>
   )

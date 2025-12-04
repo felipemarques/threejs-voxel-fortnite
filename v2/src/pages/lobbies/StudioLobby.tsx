@@ -1,63 +1,57 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { GameLobby, GameConfig } from '@/components/lobby/GameLobby'
-import { Label } from '@/components/ui/label'
-import { Slider } from '@/components/ui/slider'
-import { Checkbox } from '@/components/ui/checkbox'
+import { GameLobby } from '@/components/lobby/GameLobby'
+import { useLobbyNavigation } from '@/hooks/useLobbyNavigation'
+import { DifficultySelector } from '@/components/lobby/DifficultySelector'
+import { SliderControl } from '@/components/lobby/SliderControl'
+import { CheckboxControl } from '@/components/lobby/CheckboxControl'
 
 export function StudioLobby() {
-  const navigate = useNavigate()
   const [gridSize, setGridSize] = useState(10)
   const [snap, setSnap] = useState(true)
   const [axisHelpers, setAxisHelpers] = useState(true)
   const [autoSave, setAutoSave] = useState(true)
-
-  const handleStartGame = (baseConfig: GameConfig) => {
-    const config: GameConfig = {
-      ...baseConfig,
-      studioGridSize: gridSize,
-      studioSnap: snap,
-      studioAxisHelpers: axisHelpers,
-      studioAutoSave: autoSave,
-    }
-    navigate('/studio', { state: { config, fromLobby: true } })
-  }
+  
+  const { handleStartGame, handleBack } = useLobbyNavigation('studio')
 
   return (
     <GameLobby
       mode="Studio"
       title="Studio Mode"
-      description="Level editor and creative sandbox for building your worlds!"
-      onStartGame={handleStartGame}
-      onBack={() => navigate('/')}
+      description="Creative building mode with grid and helpers"
+      onStartGame={() => handleStartGame({
+        studioGridSize: gridSize,
+        studioSnap: snap,
+        studioHelpers: axisHelpers,
+        studioAutoSave: autoSave,
+      })}
+      onBack={handleBack}
     >
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium text-gray-300">Grid Size</Label>
-          <span className="text-sm font-bold text-[#00cec9]">{gridSize}</span>
-        </div>
-        <Slider value={[gridSize]} onValueChange={([v]) => setGridSize(v)} min={1} max={50} step={1} />
-      </div>
+      <div className="space-y-6">
+        <SliderControl
+          label="Grid Size"
+          value={gridSize}
+          onChange={setGridSize}
+          min={1}
+          max={50}
+        />
 
-      <div className="flex items-center space-x-3">
-        <Checkbox id="snap" checked={snap} onCheckedChange={(c) => setSnap(c as boolean)} />
-        <Label htmlFor="snap" className="cursor-pointer text-sm font-medium text-gray-300">
-          Snap to Grid
-        </Label>
-      </div>
+        <CheckboxControl
+          label="Snap to Grid"
+          checked={snap}
+          onChange={setSnap}
+        />
 
-      <div className="flex items-center space-x-3">
-        <Checkbox id="axis" checked={axisHelpers} onCheckedChange={(c) => setAxisHelpers(c as boolean)} />
-        <Label htmlFor="axis" className="cursor-pointer text-sm font-medium text-gray-300">
-          Show Axis Helpers
-        </Label>
-      </div>
+        <CheckboxControl
+          label="Show Axis Helpers"
+          checked={axisHelpers}
+          onChange={setAxisHelpers}
+        />
 
-      <div className="flex items-center space-x-3">
-        <Checkbox id="autosave" checked={autoSave} onCheckedChange={(c) => setAutoSave(c as boolean)} />
-        <Label htmlFor="autosave" className="cursor-pointer text-sm font-medium text-gray-300">
-          Auto-save
-        </Label>
+        <CheckboxControl
+          label="Auto Save"
+          checked={autoSave}
+          onChange={setAutoSave}
+        />
       </div>
     </GameLobby>
   )
