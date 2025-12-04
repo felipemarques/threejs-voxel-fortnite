@@ -25,6 +25,25 @@ export function ObjectViewerPage() {
   const controlsRef = useRef<OrbitControls | null>(null)
   const playerDataRef = useRef<any | null>(null)
   const animTimeRef = useRef(0)
+  
+  // Refs for values read in animation loop (to avoid closure issues)
+  const animSpeedRef = useRef(animSpeed)
+  const currentAnimationRef = useRef(currentAnimation)
+  const autoRotateRef = useRef(autoRotate)
+
+  // Update refs when state changes
+  useEffect(() => {
+    animSpeedRef.current = animSpeed
+  }, [animSpeed])
+
+  useEffect(() => {
+    currentAnimationRef.current = currentAnimation
+    animTimeRef.current = 0 // Reset animation time when changing animation
+  }, [currentAnimation])
+
+  useEffect(() => {
+    autoRotateRef.current = autoRotate
+  }, [autoRotate])
 
   // ESC key handler
   useEffect(() => {
@@ -111,16 +130,16 @@ export function ObjectViewerPage() {
     function animate() {
       requestAnimationFrame(animate)
       
-      const dt = 0.016 * animSpeed
+      const dt = 0.016 * animSpeedRef.current
       animTimeRef.current += dt
 
       // Apply animation
       if (playerDataRef.current) {
-        animateCharacter(playerDataRef.current, currentAnimation, animTimeRef.current)
+        animateCharacter(playerDataRef.current, currentAnimationRef.current, animTimeRef.current)
       }
 
       // Auto rotate
-      if (autoRotate && playerDataRef.current) {
+      if (autoRotateRef.current && playerDataRef.current) {
         playerDataRef.current.mesh.rotation.y += 0.01
       }
 
@@ -150,11 +169,6 @@ export function ObjectViewerPage() {
       }
     }
   }, []) // Only run once
-
-  // Update animation when state changes
-  useEffect(() => {
-    animTimeRef.current = 0 // Reset animation time when changing animation
-  }, [currentAnimation])
 
   // Update camera distance when zoom changes
   useEffect(() => {
