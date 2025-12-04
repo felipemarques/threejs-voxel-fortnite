@@ -6,6 +6,7 @@ import { SettingsDialog } from './menu/SettingsDialog'
 interface PauseMenuProps {
   onResume: () => void
   onQuit: () => void
+  onBackToLobby?: () => void
   settingsOpen: boolean
   onSettingsOpenChange: (open: boolean) => void
 }
@@ -13,6 +14,7 @@ interface PauseMenuProps {
 export function PauseMenu({ 
   onResume,
   onQuit,
+  onBackToLobby,
   settingsOpen, 
   onSettingsOpenChange 
 }: PauseMenuProps) {
@@ -52,6 +54,17 @@ export function PauseMenu({
             >
               ⚙️ Settings
             </Button>
+            
+            {onBackToLobby && (
+              <Button
+                size="lg"
+                variant="outline"
+                className="text-xl py-6 border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500"
+                onClick={onBackToLobby}
+              >
+                🔄 Back to Lobby
+              </Button>
+            )}
             
             <Button
               size="lg"
