@@ -428,15 +428,15 @@ export function ObjectViewerPage() {
               <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Accessories</label>
               <div className="mb-2 flex gap-3 flex-wrap">
                 {characterType === 'male' && (
-                  <label className="inline-flex items-center cursor-pointer font-normal text-sm">
+                  <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white">
                     <Checkbox id="hat" checked={showHat} onCheckedChange={(c: boolean) => setShowHat(c)} className="mr-2" /> Hat
                   </label>
                 )}
-                <label className="inline-flex items-center cursor-pointer font-normal text-sm">
+                <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white">
                   <Checkbox id="glasses" checked={showGlasses} onCheckedChange={(c: boolean) => setShowGlasses(c)} className="mr-2" /> Glasses
                 </label>
                 {characterType === 'female' && (
-                  <label className="inline-flex items-center cursor-pointer font-normal text-sm">
+                  <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white">
                     <Checkbox id="earrings" checked={showEarrings} onCheckedChange={(c: boolean) => setShowEarrings(c)} className="mr-2" /> Earrings
                   </label>
                 )}
