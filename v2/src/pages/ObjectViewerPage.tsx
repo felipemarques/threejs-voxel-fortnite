@@ -6,18 +6,32 @@ import { createMalePlayer } from '@/game/player/MalePlayerObject'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Slider } from '@/components/ui/slider'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 
 type AnimationType = 'idle' | 'walk' | 'attack' | 'jump'
+type MouthStyle = 'serious' | 'smile' | 'angry' | 'surprised' | 'none'
+type WeaponType = 'none' | 'pistol' | 'rifle' | 'smg' | 'shotgun' | 'dmr' | 'sniper'
 
 export function ObjectViewerPage() {
   const navigate = useNavigate()
   const canvasRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
   const [selectedObject, setSelectedObject] = useState('Male Character')
+  
+  // Animation controls
   const [currentAnimation, setCurrentAnimation] = useState<AnimationType>('idle')
   const [animSpeed, setAnimSpeed] = useState(1.0)
   const [zoomDistance, setZoomDistance] = useState(5)
   const [autoRotate, setAutoRotate] = useState(false)
+
+  // Player customization
+  const [shirtColor, setShirtColor] = useState('#3498db')
+  const [mouthStyle, setMouthStyle] = useState<MouthStyle>('serious')
+  const [showHat, setShowHat] = useState(true)
+  const [showGlasses, setShowGlasses] = useState(false)
+  const [weapon, setWeapon] = useState<WeaponType>('none')
 
   // Refs for Three.js objects
   const sceneRef = useRef<THREE.Scene | null>(null)
@@ -38,7 +52,7 @@ export function ObjectViewerPage() {
 
   useEffect(() => {
     currentAnimationRef.current = currentAnimation
-    animTimeRef.current = 0 // Reset animation time when changing animation
+    animTimeRef.current = 0
   }, [currentAnimation])
 
   useEffect(() => {
@@ -55,6 +69,38 @@ export function ObjectViewerPage() {
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
   }, [navigate])
+
+  // Load/reload player function
+  const loadPlayer = (firstLoad = false) => {
+    if (!sceneRef.current) return
+
+    // Remove old player
+    if (playerDataRef.current) {
+      sceneRef.current.remove(playerDataRef.current.mesh)
+    }
+
+    // Create new player with settings
+    const hexColor = parseInt(shirtColor.replace('#', '0x'))
+    const playerData = createMalePlayer({
+      shirtColor: hexColor,
+      mouthStyle,
+      showHat,
+      showGlasses,
+      weapon
+    })
+    
+    sceneRef.current.add(playerData.mesh)
+    playerDataRef.current = playerData
+
+    if (firstLoad) {
+      setLoading(false)
+    }
+  }
+
+  // Apply button handler
+  const handleApplySettings = () => {
+    loadPlayer(false)
+  }
 
   // Three.js setup
   useEffect(() => {
@@ -117,20 +163,12 @@ export function ObjectViewerPage() {
     scene.add(gridHelper)
 
     // Load male character
-    const playerData = createMalePlayer({
-      shirtColor: 0x3498db,
-      showHat: true,
-      weapon: 'none'
-    })
-    scene.add(playerData.mesh)
-    playerDataRef.current = playerData
-    setLoading(false)
+    loadPlayer(true)
 
     // Animation loop
     function animate() {
       requestAnimationFrame(animate)
       
-      // Match v1 calculation: dt * animSpeed, then * 10 in animation function
       const dt = 0.016
       animTimeRef.current += dt * animSpeedRef.current * 10
 
@@ -187,7 +225,6 @@ export function ObjectViewerPage() {
 
   // Animation function (based on v1)
   function animateCharacter(playerData: any, anim: AnimationType, time: number) {
-    // time already includes the * 10 multiplier from the loop
     const t = time
 
     if (anim === 'idle') {
@@ -249,11 +286,7 @@ export function ObjectViewerPage() {
               Characters
             </h3>
             <Card
-              className={`cursor-pointer transition-all ${
-                selectedObject === 'Male Character'
-                  ? 'bg-blue-600 border-blue-500'
-                  : 'bg-slate-900 border-slate-800 hover:bg-slate-800'
-              }`}
+              className="cursor-pointer bg-blue-600 border-blue-500"
               onClick={() => setSelectedObject('Male Character')}
             >
               <CardHeader className="p-3">
@@ -300,6 +333,94 @@ export function ObjectViewerPage() {
         {/* Controls Panel */}
         <div className="absolute bottom-6 right-6 w-80 bg-slate-950/95 backdrop-blur-sm border border-slate-800 rounded-lg p-4 max-h-[calc(100vh-120px)] overflow-y-auto">
           <div className="space-y-4">
+            {/* Player Customization */}
+            <div className="pb-4 border-b border-slate-700">
+              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">
+                Player Customization
+              </h3>
+              
+              {/* Shirt Color */}
+              <div className="mb-3">
+                <Label className="text-sm text-slate-400 mb-2 block">Shirt Color</Label>
+                <input
+                  type="color"
+                  value={shirtColor}
+                  onChange={(e) => setShirtColor(e.target.value)}
+                  className="w-full h-10 rounded cursor-pointer"
+                />
+              </div>
+
+              {/* Mouth Style */}
+              <div className="mb-3">
+                <Label className="text-sm text-slate-400 mb-2 block">Mouth Style</Label>
+                <Select value={mouthStyle} onValueChange={(v) => setMouthStyle(v as MouthStyle)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="serious">Serious</SelectItem>
+                    <SelectItem value="smile">Smile</SelectItem>
+                    <SelectItem value="angry">Angry</SelectItem>
+                    <SelectItem value="surprised">Surprised</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Accessories */}
+              <div className="mb-3">
+                <Label className="text-sm text-slate-400 mb-2 block">Accessories</Label>
+                <div className="flex gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="hat"
+                      checked={showHat}
+                      onCheckedChange={(checked) => setShowHat(checked as boolean)}
+                    />
+                    <label htmlFor="hat" className="text-sm text-slate-300">
+                      Hat
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="glasses"
+                      checked={showGlasses}
+                      onCheckedChange={(checked) => setShowGlasses(checked as boolean)}
+                    />
+                    <label htmlFor="glasses" className="text-sm text-slate-300">
+                      Glasses
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Weapon */}
+              <div className="mb-3">
+                <Label className="text-sm text-slate-400 mb-2 block">Weapon</Label>
+                <Select value={weapon} onValueChange={(v) => setWeapon(v as WeaponType)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="pistol">Pistol</SelectItem>
+                    <SelectItem value="rifle">Rifle</SelectItem>
+                    <SelectItem value="smg">SMG</SelectItem>
+                    <SelectItem value="shotgun">Shotgun</SelectItem>
+                    <SelectItem value="dmr">DMR</SelectItem>
+                    <SelectItem value="sniper">Sniper</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                onClick={handleApplySettings}
+                className="w-full bg-cyan-600 hover:bg-cyan-700"
+              >
+                Apply Changes
+              </Button>
+            </div>
+
             {/* Animation Controls */}
             <div>
               <label className="text-sm text-slate-400 block mb-2 font-semibold">Animation</label>
