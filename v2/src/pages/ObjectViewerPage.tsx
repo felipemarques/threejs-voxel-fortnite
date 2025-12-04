@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { createMalePlayer } from '@/game/player/MalePlayerObject'
+import { createFemalePlayer } from '@/game/player/FemalePlayerObject'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -11,6 +12,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 type AnimationType = 'idle' | 'walk' | 'attack' | 'jump'
 type MouthStyle = 'serious' | 'smile' | 'angry' | 'surprised' | 'none'
 type WeaponType = 'none' | 'pistol' | 'rifle' | 'smg' | 'shotgun' | 'dmr' | 'sniper'
+type CharacterType = 'male' | 'female'
+type HairStyle = 'long' | 'ponytail' | 'short' | 'bun'
 
 export function ObjectViewerPage() {
   const navigate = useNavigate()
@@ -24,12 +27,20 @@ export function ObjectViewerPage() {
   const [autoRotate, setAutoRotate] = useState(false)
   const [isNight, setIsNight] = useState(false)
 
+  // Character selection
+  const [characterType, setCharacterType] = useState<CharacterType>('male')
+  
   // Player customization
   const [shirtColor, setShirtColor] = useState('#3498db')
   const [mouthStyle, setMouthStyle] = useState<MouthStyle>('serious')
   const [showHat, setShowHat] = useState(true)
   const [showGlasses, setShowGlasses] = useState(false)
   const [weapon, setWeapon] = useState<WeaponType>('none')
+  
+  // Female-specific customization
+  const [hairColor, setHairColor] = useState('#8b4513') // Brown
+  const [hairStyle, setHairStyle] = useState<HairStyle>('long')
+  const [showEarrings, setShowEarrings] = useState(true)
 
   // Refs for Three.js objects
   const sceneRef = useRef<THREE.Scene | null>(null)
@@ -69,13 +80,24 @@ export function ObjectViewerPage() {
     }
 
     const hexColor = parseInt(shirtColor.replace('#', '0x'))
-    const playerData = createMalePlayer({
-      shirtColor: hexColor,
-      mouthStyle,
-      showHat,
-      showGlasses,
-      weapon
-    })
+    
+    const playerData = characterType === 'female' 
+      ? createFemalePlayer({
+          shirtColor: hexColor,
+          hairColor: parseInt(hairColor.replace('#', '0x')),
+          hairStyle,
+          mouthStyle,
+          showEarrings,
+          showGlasses,
+          weapon
+        })
+      : createMalePlayer({
+          shirtColor: hexColor,
+          mouthStyle,
+          showHat,
+          showGlasses,
+          weapon
+        })
     
     sceneRef.current.add(playerData.mesh)
     playerDataRef.current = playerData
@@ -235,6 +257,11 @@ export function ObjectViewerPage() {
       }
     }
   }, [isNight])
+  
+  // Reload player when character type changes
+  useEffect(() => {
+    loadPlayer(false)
+  }, [characterType])
 
   // Animation function - v1 exact
   function animateCharacter(playerData: any, anim: AnimationType, time: number, wrapper: any) {
@@ -288,14 +315,35 @@ export function ObjectViewerPage() {
             <div className="p-[8px_10px] font-bold text-[#dfe6e9] uppercase text-[13.6px] tracking-[1px] mb-[5px]">
               CHARACTERS
             </div>
-            <Card className="cursor-pointer bg-[#0984e3] border-none">
-              <CardHeader className="p-3">
-                <CardTitle className="text-sm text-white flex items-center m-0 font-medium">
-                  <span className="mr-2 opacity-70">📦</span>
-                  Male Character
-                </CardTitle>
-              </CardHeader>
-            </Card>
+            <div className="space-y-2">
+              <Card 
+                onClick={() => setCharacterType('male')}
+                className={`cursor-pointer border-none ${
+                  characterType === 'male' ? 'bg-[#0984e3]' : 'bg-[#444]'
+                }`}
+              >
+                <CardHeader className="p-3">
+                  <CardTitle className="text-sm text-white flex items-center m-0 font-medium">
+                    <span className="mr-2 opacity-70">🧑</span>
+                    Male Character
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+              
+              <Card 
+                onClick={() => setCharacterType('female')}
+                className={`cursor-pointer border-none ${
+                  characterType === 'female' ? 'bg-[#e91e63]' : 'bg-[#444]'
+                }`}
+              >
+                <CardHeader className="p-3">
+                  <CardTitle className="text-sm text-white flex items-center m-0 font-medium">
+                    <span className="mr-2 opacity-70">👩</span>
+                    Female Character
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            </div>
           </div>
         </div>
 
@@ -318,8 +366,12 @@ export function ObjectViewerPage() {
 
         {/* Object Info */}
         <div className="absolute top-5 right-5 bg-[rgba(0,0,0,0.6)] px-[15px] py-[10px] rounded z-[5] text-right pointer-events-none">
-          <h3 className="text-xl font-bold text-[#00cec9] m-0">Male Character</h3>
-          <p className="text-[14.4px] text-[#aaa] m-0">male-character</p>
+          <h3 className="text-xl font-bold text-[#00cec9] m-0">
+            {characterType === 'female' ? 'Female' : 'Male'} Character
+          </h3>
+          <p className="text-[14.4px] text-[#aaa] m-0">
+            {characterType}-character
+          </p>
         </div>
 
         {/* Controls Panel */}
@@ -331,6 +383,26 @@ export function ObjectViewerPage() {
               <div className="flex gap-[5px] items-center mb-2">
                 <input type="color" value={shirtColor} onChange={(e) => setShirtColor(e.target.value)} className="flex-1" />
               </div>
+
+              {characterType === 'female' && (
+                <>
+                  <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Hair Color</label>
+                  <div className="flex gap-[5px] items-center mb-2">
+                    <input type="color" value={hairColor} onChange={(e) => setHairColor(e.target.value)} className="flex-1" />
+                  </div>
+
+                  <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Hair Style</label>
+                  <Select value={hairStyle} onValueChange={(v) => setHairStyle(v as HairStyle)}>
+                    <SelectTrigger className="w-full mb-2 p-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="long">Long</SelectItem>
+                      <SelectItem value="ponytail">Ponytail</SelectItem>
+                      <SelectItem value="short">Short</SelectItem>
+                      <SelectItem value="bun">Bun</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
 
               <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Mouth Style</label>
               <Select value={mouthStyle} onValueChange={(v) => setMouthStyle(v as MouthStyle)}>
@@ -345,13 +417,20 @@ export function ObjectViewerPage() {
               </Select>
 
               <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Accessories</label>
-              <div className="mb-2 flex gap-3">
-                <label className="inline-flex items-center cursor-pointer font-normal text-sm">
-                  <Checkbox id="hat" checked={showHat} onCheckedChange={(c: boolean) => setShowHat(c)} className="mr-2" /> Hat
-                </label>
+              <div className="mb-2 flex gap-3 flex-wrap">
+                {characterType === 'male' && (
+                  <label className="inline-flex items-center cursor-pointer font-normal text-sm">
+                    <Checkbox id="hat" checked={showHat} onCheckedChange={(c: boolean) => setShowHat(c)} className="mr-2" /> Hat
+                  </label>
+                )}
                 <label className="inline-flex items-center cursor-pointer font-normal text-sm">
                   <Checkbox id="glasses" checked={showGlasses} onCheckedChange={(c: boolean) => setShowGlasses(c)} className="mr-2" /> Glasses
                 </label>
+                {characterType === 'female' && (
+                  <label className="inline-flex items-center cursor-pointer font-normal text-sm">
+                    <Checkbox id="earrings" checked={showEarrings} onCheckedChange={(c: boolean) => setShowEarrings(c)} className="mr-2" /> Earrings
+                  </label>
+                )}
               </div>
 
               <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Weapon</label>
