@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGameSettings, type GameMode } from '@/stores/gameSettings'
-import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { SettingsDialog } from './SettingsDialog'
 
@@ -65,21 +64,27 @@ const gameModes: Array<{
 
 export function MainMenu() {
   const navigate = useNavigate()
-  const { gameMode, updateSetting } = useGameSettings()
-  const [selectedMode, setSelectedMode] = useState<GameMode>(gameMode)
+  const { updateSetting } = useGameSettings()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [clickedCard, setClickedCard] = useState<string | null>(null)
 
-  const handleSelectMode = (mode: GameMode) => {
-    setSelectedMode(mode)
+  const handleModeClick = (mode: GameMode, route: string) => {
+    // Visual feedback
+    setClickedCard(mode)
     updateSetting('gameMode', mode)
+    
+    // Short delay for visual effect, then navigate
+    setTimeout(() => {
+      navigate(route)
+    }, 150)
   }
 
-  const handleStartGame = () => {
-    updateSetting('gameMode', selectedMode)
-    const modeData = gameModes.find(m => m.id === selectedMode)
-    if (modeData) {
-      navigate(modeData.route)
-    }
+  const handleSettingsClick = () => {
+    setClickedCard('settings')
+    setTimeout(() => {
+      setSettingsOpen(true)
+      setClickedCard(null)
+    }, 150)
   }
 
   return (
@@ -92,21 +97,23 @@ export function MainMenu() {
         Escolha seu modo de jogo
       </p>
 
-      {/* Game Mode Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-12 max-w-7xl">
+      {/* Game Mode Grid + Settings */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-8 max-w-7xl">
+        {/* Game Mode Cards */}
         {gameModes.map((mode) => (
           <Card
             key={mode.id}
             className={`
-              cursor-pointer transition-all duration-200 
+              cursor-pointer transition-all duration-150
               bg-slate-950 border-slate-800
               hover:border-white hover:shadow-lg hover:shadow-white/10
-              ${selectedMode === mode.id 
-                ? 'ring-2 ring-white border-white shadow-xl shadow-white/20' 
+              active:scale-95
+              ${clickedCard === mode.id 
+                ? 'scale-95 border-white shadow-xl shadow-white/30' 
                 : ''
               }
             `}
-            onClick={() => handleSelectMode(mode.id)}
+            onClick={() => handleModeClick(mode.id, mode.route)}
           >
             <CardHeader className="space-y-3">
               <div className="text-4xl">{mode.emoji}</div>
@@ -119,29 +126,35 @@ export function MainMenu() {
             </CardHeader>
           </Card>
         ))}
-      </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-4">
-        <Button
-          onClick={handleStartGame}
-          size="lg"
-          className="text-lg px-10 py-6 bg-white text-black hover:bg-slate-200 font-semibold"
+        {/* Settings Card */}
+        <Card
+          className={`
+            cursor-pointer transition-all duration-150
+            bg-slate-950 border-slate-800
+            hover:border-white hover:shadow-lg hover:shadow-white/10
+            active:scale-95
+            ${clickedCard === 'settings' 
+              ? 'scale-95 border-white shadow-xl shadow-white/30' 
+              : ''
+            }
+          `}
+          onClick={handleSettingsClick}
         >
-          PLAY GAME
-        </Button>
-        <Button
-          variant="outline"
-          size="lg"
-          className="text-lg px-8 py-6 border-white text-white hover:bg-white hover:text-black"
-          onClick={() => setSettingsOpen(true)}
-        >
-          Settings
-        </Button>
+          <CardHeader className="space-y-3">
+            <div className="text-4xl">⚙️</div>
+            <CardTitle className="text-white text-xl font-semibold">
+              Settings
+            </CardTitle>
+            <CardDescription className="text-slate-400 text-sm">
+              Configure game options and preferences
+            </CardDescription>
+          </CardHeader>
+        </Card>
       </div>
 
       {/* Footer */}
-      <p className="text-slate-600 mt-16 text-xs uppercase tracking-wider">
+      <p className="text-slate-600 mt-8 text-xs uppercase tracking-wider">
         Press ESC during game to pause
       </p>
 
