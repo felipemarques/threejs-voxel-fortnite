@@ -69,6 +69,7 @@ export function ObjectViewerPage() {
   const animSpeedRef = useRef(animSpeed)
   const currentAnimationRef = useRef(currentAnimation)
   const autoRotateRef = useRef(autoRotate)
+  const characterTypeRef = useRef(characterType)
 
   // Update refs when state changes
   useEffect(() => { animSpeedRef.current = animSpeed }, [animSpeed])
@@ -76,6 +77,7 @@ export function ObjectViewerPage() {
     currentAnimationRef.current = currentAnimation
   }, [currentAnimation])
   useEffect(() => { autoRotateRef.current = autoRotate }, [autoRotate])
+  useEffect(() => { characterTypeRef.current = characterType }, [characterType])
 
   // ESC key handler
   useEffect(() => {
