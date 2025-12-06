@@ -454,89 +454,91 @@ export function ObjectViewerPage() {
         {/* Controls Panel */}
         <div className="absolute bottom-5  right-5 w-[300px] bg-[rgba(30,30,30,0.9)] backdrop-blur-[5px] p-[15px] rounded-lg z-10 border border-[#444] max-h-[calc(100vh-100px)] overflow-y-auto">
           <div className="space-y-[15px]">
-            {/* Player Controls */}
-            <div>
-              {/* Color Pickers Row */}
-              <div className="grid grid-cols-2 gap-3 mb-2">
-                <div>
-                  <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Shirt Color</label>
-                  <input type="color" value={shirtColor} onChange={(e) => setShirtColor(e.target.value)} className="w-full h-10" />
-                </div>
-                {characterType === 'female' && (
+            {/* Player Controls - Only show for non-zombie characters */}
+            {characterType !== 'zombie' && (
+              <div>
+                {/* Color Pickers Row */}
+                <div className="grid grid-cols-2 gap-3 mb-2">
                   <div>
-                    <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Hair Color</label>
-                    <input type="color" value={hairColor} onChange={(e) => setHairColor(e.target.value)} className="w-full h-10" />
+                    <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Shirt Color</label>
+                    <input type="color" value={shirtColor} onChange={(e) => setShirtColor(e.target.value)} className="w-full h-10" />
                   </div>
-                )}
-              </div>
+                  {characterType === 'female' && (
+                    <div>
+                      <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Hair Color</label>
+                      <input type="color" value={hairColor} onChange={(e) => setHairColor(e.target.value)} className="w-full h-10" />
+                    </div>
+                  )}
+                </div>
 
-              {/* Style Selectors Row */}
-              <div className={`grid ${characterType === 'female' ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-2`}>
-                {characterType === 'female' && (
+                {/* Style Selectors Row */}
+                <div className={`grid ${characterType === 'female' ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-2`}>
+                  {characterType === 'female' && (
+                    <div>
+                      <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Hair Style</label>
+                      <Select value={hairStyle} onValueChange={(v) => setHairStyle(v as HairStyle)}>
+                        <SelectTrigger className="w-full p-1 bg-white/10 border-white/20 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="long">Long</SelectItem>
+                          <SelectItem value="ponytail">Ponytail</SelectItem>
+                          <SelectItem value="short">Short</SelectItem>
+                          <SelectItem value="bun">Bun</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  
                   <div>
-                    <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Hair Style</label>
-                    <Select value={hairStyle} onValueChange={(v) => setHairStyle(v as HairStyle)}>
+                    <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Mouth Style</label>
+                    <Select value={mouthStyle} onValueChange={(v) => setMouthStyle(v as MouthStyle)}>
                       <SelectTrigger className="w-full p-1 bg-white/10 border-white/20 text-white"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="long">Long</SelectItem>
-                        <SelectItem value="ponytail">Ponytail</SelectItem>
-                        <SelectItem value="short">Short</SelectItem>
-                        <SelectItem value="bun">Bun</SelectItem>
+                        <SelectItem value="serious">Serious</SelectItem>
+                        <SelectItem value="smile">Smile</SelectItem>
+                        <SelectItem value="angry">Angry</SelectItem>
+                        <SelectItem value="surprised">Surprised</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                )}
-                
-                <div>
-                  <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Mouth Style</label>
-                  <Select value={mouthStyle} onValueChange={(v) => setMouthStyle(v as MouthStyle)}>
-                    <SelectTrigger className="w-full p-1 bg-white/10 border-white/20 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="serious">Serious</SelectItem>
-                      <SelectItem value="smile">Smile</SelectItem>
-                      <SelectItem value="angry">Angry</SelectItem>
-                      <SelectItem value="surprised">Surprised</SelectItem>
-                      <SelectItem value="none">None</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
-              </div>
 
-              <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Accessories</label>
-              <div className="mb-2 flex gap-3 flex-wrap">
-                {characterType === 'male' && (
+                <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Accessories</label>
+                <div className="mb-2 flex gap-3 flex-wrap">
+                  {characterType === 'male' && (
+                    <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white">
+                      <Checkbox id="hat" checked={showHat} onCheckedChange={(c: boolean) => setShowHat(c)} className="mr-2" /> Hat
+                    </label>
+                  )}
                   <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white">
-                    <Checkbox id="hat" checked={showHat} onCheckedChange={(c: boolean) => setShowHat(c)} className="mr-2" /> Hat
+                    <Checkbox id="glasses" checked={showGlasses} onCheckedChange={(c: boolean) => setShowGlasses(c)} className="mr-2" /> Glasses
                   </label>
-                )}
-                <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white">
-                  <Checkbox id="glasses" checked={showGlasses} onCheckedChange={(c: boolean) => setShowGlasses(c)} className="mr-2" /> Glasses
-                </label>
-                {characterType === 'female' && (
-                  <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white">
-                    <Checkbox id="earrings" checked={showEarrings} onCheckedChange={(c: boolean) => setShowEarrings(c)} className="mr-2" /> Earrings
-                  </label>
-                )}
+                  {characterType === 'female' && (
+                    <label className="inline-flex items-center cursor-pointer font-normal text-sm text-white">
+                      <Checkbox id="earrings" checked={showEarrings} onCheckedChange={(c: boolean) => setShowEarrings(c)} className="mr-2" /> Earrings
+                    </label>
+                  )}
+                </div>
+
+                <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Weapon</label>
+                <Select value={weapon} onValueChange={(v) => setWeapon(v as WeaponType)}>
+                  <SelectTrigger className="w-full mb-2 p-1 bg-white/10 border-white/20 text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="pistol">Pistol</SelectItem>
+                    <SelectItem value="rifle">Rifle</SelectItem>
+                    <SelectItem value="smg">SMG</SelectItem>
+                    <SelectItem value="shotgun">Shotgun</SelectItem>
+                    <SelectItem value="dmr">DMR</SelectItem>
+                    <SelectItem value="sniper">Sniper</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <button onClick={() => loadPlayer(false)} className="bg-[#444] border-none text-white px-3 py-[6px] rounded cursor-pointer text-[13.6px] transition-colors hover:bg-[#555] w-full">
+                  Apply Changes
+                </button>
               </div>
-
-              <label className="block mb-[5px] text-[13.6px] text-[#aaa]">Weapon</label>
-              <Select value={weapon} onValueChange={(v) => setWeapon(v as WeaponType)}>
-                <SelectTrigger className="w-full mb-2 p-1 bg-white/10 border-white/20 text-white"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="pistol">Pistol</SelectItem>
-                  <SelectItem value="rifle">Rifle</SelectItem>
-                  <SelectItem value="smg">SMG</SelectItem>
-                  <SelectItem value="shotgun">Shotgun</SelectItem>
-                  <SelectItem value="dmr">DMR</SelectItem>
-                  <SelectItem value="sniper">Sniper</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <button onClick={() => loadPlayer(false)} className="bg-[#444] border-none text-white px-3 py-[6px] rounded cursor-pointer text-[13.6px] transition-colors hover:bg-[#555] w-full">
-                Apply Changes
-              </button>
-            </div>
+            )}
 
             {/* Animation */}
             <div>
