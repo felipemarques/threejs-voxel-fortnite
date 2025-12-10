@@ -30,7 +30,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto z-[400]">
         <DialogHeader>
           <DialogTitle className="text-2xl">⚙️ Game Settings</DialogTitle>
           <DialogDescription>
@@ -62,6 +62,23 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 min={5}
                 max={500}
                 step={5}
+              />
+            </div>
+            
+            {/* Camera Zoom */}
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <Label>Camera Zoom</Label>
+                <span className="text-sm text-muted-foreground">
+                  {settings.cameraZoom.toFixed(1)}
+                </span>
+              </div>
+              <Slider
+                value={[settings.cameraZoom]}
+                onValueChange={([value]) => settings.updateSetting('cameraZoom', value)}
+                min={2.0}
+                max={10.0}
+                step={0.1}
               />
             </div>
 

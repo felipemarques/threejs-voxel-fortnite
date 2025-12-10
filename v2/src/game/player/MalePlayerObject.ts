@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 
-type MouthStyle = 'serious' | 'smile' | 'angry' | ' surprised' | 'none'
+type MouthStyle = 'serious' | 'smile' | 'angry' | 'surprised' | 'none'
 type WeaponType = 'none' | 'pistol' | 'rifle' | 'smg' | 'shotgun' | 'dmr' | 'sniper'
 
 interface PlayerOptions {

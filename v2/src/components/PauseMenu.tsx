@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { SettingsDialog } from './menu/SettingsDialog'
 
@@ -32,7 +31,7 @@ export function PauseMenu({
   return (
     <>
       {/* Translucent backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[300]">
         <div className="bg-slate-900/90 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl min-w-[400px]">
           <h2 className="text-4xl font-bold text-white mb-2 text-center">PAUSED</h2>
           <p className="text-slate-400 text-center mb-8">Game is paused</p>

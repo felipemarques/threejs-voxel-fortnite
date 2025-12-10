@@ -97,16 +97,13 @@ export function MainMenu() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8">
+    <div className="h-screen w-full bg-black flex flex-col items-center overflow-y-auto overflow-x-hidden py-10 px-4">
       {/* Title */}
       <img 
         src="/logo.png" 
         alt="Voxel Firecraft" 
-        className="h-64 mb-6 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 transition-transform duration-500"
+        className="h-32 mb-8 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 transition-transform duration-500"
       />
-      <p className="text-slate-400 mb-16 text-sm uppercase tracking-widest">
-        Escolha seu modo de jogo
-      </p>
 
       {/* Game Mode Grid + Settings + Object Viewer */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-8 max-w-6xl">

@@ -17,9 +17,9 @@ interface FatPlayerOptions {
  */
 export function createFatMalePlayer(options: FatPlayerOptions = {}) {
   const {
-    shirtColor = 0x3498db,
+    shirtColor = 0xe67e22,
     mouthStyle = 'serious',
-    showHat = true,
+    showHat = false,
     showGlasses = false,
     weapon = 'none'
   } = options
@@ -55,6 +55,25 @@ export function createFatMalePlayer(options: FatPlayerOptions = {}) {
     )
     capBrim.position.set(0, 0.22, 0.35)
     head.add(capBrim)
+  }
+
+  // Hair (only shown when hat is not shown)
+  if (!showHat) {
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x3d2817 }) // Dark brown
+    const hairTop = new THREE.Mesh(
+      new THREE.BoxGeometry(0.52, 0.15, 0.52),
+      hairMat
+    )
+    hairTop.position.set(0, 0.32, 0)
+    head.add(hairTop)
+
+    // Hair front (fringe)
+    const hairFront = new THREE.Mesh(
+      new THREE.BoxGeometry(0.52, 0.12, 0.1),
+      hairMat
+    )
+    hairFront.position.set(0, 0.22, 0.28)
+    head.add(hairFront)
   }
 
   // Sunglasses

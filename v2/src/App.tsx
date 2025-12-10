@@ -4,6 +4,7 @@ import { MainMenu } from './components/menu/MainMenu'
 import { GameCanvas } from './components/GameCanvas'
 import { PauseMenu } from './components/PauseMenu'
 import { ObjectViewerPage } from './pages/ObjectViewerPage'
+import { ArcadePage } from './pages/ArcadePage'
 import { LoadingScreen } from './components/ui/LoadingScreen'
 import { useGameSettings } from './stores/gameSettings'
 import { useDebugStore } from './stores/debugStore'
@@ -119,7 +120,7 @@ function App() {
         <Route path="/object-viewer" element={<ObjectViewerPage />} />
         
         {/* Direct game routes (backward compatible) */}
-        <Route path="/arcade" element={<GamePage />} />
+        <Route path="/arcade" element={<ArcadePage />} />
         <Route path="/survival" element={<GamePage />} />
         <Route path="/arena" element={<GamePage />} />
         <Route path="/matrix" element={<GamePage />} />

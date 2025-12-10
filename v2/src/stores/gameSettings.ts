@@ -12,6 +12,7 @@ interface GameSettings {
   stormEnabled: boolean
   stormTime: number
   cameraMode: CameraMode
+  cameraZoom: number
   
   // Graphics
   performanceMode: boolean
@@ -50,6 +51,7 @@ const defaultSettings: Omit<GameSettings, 'updateSetting' | 'resetToDefaults'> =
   stormEnabled: true,
   stormTime: 180,
   cameraMode: 'TPS',
+  cameraZoom: 3.4,
   
   // Graphics
   performanceMode: false,
